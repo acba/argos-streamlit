@@ -12,7 +12,8 @@ from docx.shared import Mm
 from jinja2 import Environment, BaseLoader, StrictUndefined, exceptions
 
 from classes import gerar_tabela_achados
-from utils import get_variaveis_template, StreamlitLogHandler, processa_imagens_contexto, cross_ref_figuras
+from utils import get_variaveis_template, StreamlitLogHandler, processa_imagens_contexto, cross_ref_figuras,\
+data_hoje_abnt, data_hoje
 
 st.set_page_config(page_title="Gera Relatórios Individuais", layout="wide")
 
@@ -163,6 +164,10 @@ if st.session_state.audit_completed:
         st.code(f"{vars_template}")
 
         st.subheader("3. Gere os relatórios")
+import tempfile
+
+# ... (keep imports)
+
         if st.button("Gerar Relatórios Individuais"):
             # Processamento do template markdown
             with st.spinner("Gerando relatórios individuais..."):
@@ -172,91 +177,100 @@ if st.session_state.audit_completed:
                 generation_log = st.expander("Log de Geração", expanded=True)
                 zip_buffer = io.BytesIO()
 
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_f:
-                    for sigla, row_auditado in df_auditados.iterrows():
-                        # Mapa para armazenar o caminho de todos os arquivos de contexto disponíveis
-                        context_files_path_map = {}
-                        unzip_dir = os.path.join("tmp", "unzipped_context")
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    # Prepara os arquivos de contexto UMA VEZ, fora do loop de auditados
+                    context_files_path_map = {}
+                    unzip_dir = os.path.join(tmp_dir, "unzipped_context")
+                    os.makedirs(unzip_dir, exist_ok=True)
 
-                        for uploaded_file in arquivos_fontes_contexto:
-                            if uploaded_file.name.lower().endswith('.zip'):
-                                os.makedirs(unzip_dir, exist_ok=True)
-                                with zipfile.ZipFile(uploaded_file, 'r') as zip_ref:
-                                    zip_ref.extractall(unzip_dir)
-                                # Mapeia os arquivos extraídos
-                                for root, _, files in os.walk(unzip_dir):
-                                    for filename in files:
-                                        context_files_path_map[filename] = os.path.join(root, filename)
-                            else:
-                                # Salva arquivos individuais em um local temporário
-                                temp_path = os.path.join("tmp", uploaded_file.name)
-                                with open(temp_path, "wb") as f:
-                                    f.write(uploaded_file.getvalue())
-                                context_files_path_map[uploaded_file.name] = temp_path
+                    for uploaded_file in arquivos_fontes_contexto:
+                        if uploaded_file.name.lower().endswith('.zip'):
+                            with zipfile.ZipFile(uploaded_file, 'r') as zip_ref:
+                                zip_ref.extractall(unzip_dir)
+                            # Mapeia os arquivos extraídos
+                            for root, _, files in os.walk(unzip_dir):
+                                for filename in files:
+                                    context_files_path_map[filename] = os.path.join(root, filename)
+                        else:
+                            # Salva arquivos individuais em um local temporário
+                            temp_path = os.path.join(tmp_dir, uploaded_file.name)
+                            with open(temp_path, "wb") as f:
+                                f.write(uploaded_file.getvalue())
+                            context_files_path_map[uploaded_file.name] = temp_path
 
-                        with generation_log:
-                            st.markdown(f"--- \n#### Processando: **{sigla}**")
-                            contexto = row_auditado.to_dict()
-                            contexto['sigla'] = sigla
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_f:
+                        for sigla, row_auditado in df_auditados.iterrows():
+                            
+                            with generation_log:
+                                st.markdown(f"--- \n#### Processando: **{sigla}**")
+                                contexto = row_auditado.to_dict()
+                                contexto['sigla'] = sigla
+                                contexto['data_hoje_abnt'] = data_hoje_abnt()
+                                contexto['data_hoje'] = data_hoje()
 
-                            if df_contexto_extra is not None and sigla in df_contexto_extra.index:
-                                contexto.update(df_contexto_extra.loc[sigla].to_dict())
-                            contexto['auditado'] = auditados[sigla]
+                                if df_contexto_extra is not None and sigla in df_contexto_extra.index:
+                                    contexto.update(df_contexto_extra.loc[sigla].to_dict())
+                                contexto['auditado'] = auditados[sigla]
 
-                            vars_faltantes = set(vars_template) - set(contexto.keys())
-                            if len(vars_faltantes):
-                                st.warning(f'Atenção: As seguintes variáveis estão sendo utilizadas no template, mas não existem nos dados do contexto: {", ".join(vars_faltantes)}\nPara não impedir o processamento da geração, serão preenchidos dados vazios para essas variáveis.')
-                                for var in vars_faltantes:
-                                    contexto[var] = []
+                                vars_faltantes = set(vars_template) - set(contexto.keys())
+                                if len(vars_faltantes):
+                                    st.warning(f'Atenção: As seguintes variáveis estão sendo utilizadas no template, mas não existem nos dados do contexto: {", ".join(vars_faltantes)}\nPara não impedir o processamento da geração, serão preenchidos dados vazios para essas variáveis.')
+                                    for var in vars_faltantes:
+                                        contexto[var] = []
 
-                            if arquivo_template_md:
-                                try:
-                                    # Processa as imagens para o contexto do Markdown
-                                    contexto = processa_imagens_contexto(contexto, context_files_path_map, 'md')
-                                    template_content = cross_ref_figuras(template_content)
+                                if arquivo_template_md:
+                                    try:
+                                        # Processa as imagens para o contexto do Markdown
+                                        contexto = processa_imagens_contexto(contexto, context_files_path_map, 'md')
+                                        template_content = cross_ref_figuras(template_content)
 
-                                    template_md = env.from_string(template_content)
-                                    conteudo_final_md = template_md.render(contexto)
+                                        template_md = env.from_string(template_content)
+                                        conteudo_final_md = template_md.render(contexto)
 
-                                    md_filename = f'tmp/_relatorio-{sigla}.md'
-                                    with open(md_filename, 'w', encoding='utf-8') as f:
-                                        f.write(conteudo_final_md)
+                                        md_filename = os.path.join(tmp_dir, f'_relatorio-{sigla}.md')
+                                        with open(md_filename, 'w', encoding='utf-8') as f:
+                                            f.write(conteudo_final_md)
 
-                                    docx_filename = f'tmp/relatorio-{sigla}.docx'
-                                    args_docx = ['--figure-caption-position=above', '--reference-doc=' + template_ref_docx]
-                                    pypandoc_logger = logging.getLogger('pypandoc')
-                                    pypandoc_logger.setLevel(logging.WARNING)
-                                    log_container = st.empty()
-                                    handler = StreamlitLogHandler(log_container)
-                                    pypandoc_logger.addHandler(handler)
+                                        docx_filename = os.path.join(tmp_dir, f'relatorio-{sigla}.docx')
+                                        
+                                        # Define caminhos de recursos para o Pandoc encontrar as imagens
+                                        resource_paths = ['.', tmp_dir, unzip_dir]
+                                        resource_path_arg = '--resource-path=' + os.pathsep.join(resource_paths)
+                                        
+                                        args_docx = ['--figure-caption-position=above', '--reference-doc=' + template_ref_docx, resource_path_arg]
+                                        pypandoc_logger = logging.getLogger('pypandoc')
+                                        pypandoc_logger.setLevel(logging.WARNING)
+                                        log_container = st.empty()
+                                        handler = StreamlitLogHandler(log_container)
+                                        pypandoc_logger.addHandler(handler)
 
-                                    pypandoc.convert_file(md_filename, to='docx', outputfile=docx_filename, extra_args=args_docx)
-                                    pypandoc_logger.removeHandler(handler)
+                                        pypandoc.convert_file(md_filename, to='docx', outputfile=docx_filename, extra_args=args_docx)
+                                        pypandoc_logger.removeHandler(handler)
 
-                                    if not handler.records: st.success(f"Relatório para **{sigla}** gerado.")
-                                    zip_f.write(docx_filename, arcname=f'Relatorio-{sigla}.docx')
+                                        if not handler.records: st.success(f"Relatório para **{sigla}** gerado.")
+                                        zip_f.write(docx_filename, arcname=f'Relatorio-{sigla}.docx')
 
-                                except exceptions.UndefinedError as e:
-                                    st.error(f"**Erro no template para `{sigla}`:** A variável `{e.message.split(' is undefined')[0]}` não foi encontrada.")
-                                except Exception as e:
-                                    st.error(f"Erro ao gerar relatório para **{sigla}**: {e}")
-                            elif arquivo_template_docx:
-                                try:
-                                    base_docx = DocxTemplate(arquivo_template_docx)
-                                    # Processa as imagens para o contexto do DOCX
-                                    contexto = processa_imagens_contexto(contexto, context_files_path_map, 'docx', base_docx=base_docx)
-                                    base_docx.render(contexto)
-                                except Exception as e:
-                                    st.error(f"Erro ao renderizar o template DOCX para **{sigla}**: {e}")
+                                    except exceptions.UndefinedError as e:
+                                        st.error(f"**Erro no template para `{sigla}`:** A variável `{e.message.split(' is undefined')[0]}` não foi encontrada.")
+                                    except Exception as e:
+                                        st.error(f"Erro ao gerar relatório para **{sigla}**: {e}")
+                                elif arquivo_template_docx:
+                                    try:
+                                        base_docx = DocxTemplate(arquivo_template_docx)
+                                        # Processa as imagens para o contexto do DOCX
+                                        contexto = processa_imagens_contexto(contexto, context_files_path_map, 'docx', base_docx=base_docx)
+                                        base_docx.render(contexto)
+                                    except Exception as e:
+                                        st.error(f"Erro ao renderizar o template DOCX para **{sigla}**: {e}")
 
-                                bio = io.BytesIO()
-                                base_docx.save(bio)
+                                    bio = io.BytesIO()
+                                    base_docx.save(bio)
 
-                                zip_f.writestr(f"Relatorio-{sigla}.docx", bio.getvalue())
-                                st.success(f"Relatório para **{sigla}** gerado.")
+                                    zip_f.writestr(f"Relatorio-{sigla}.docx", bio.getvalue())
+                                    st.success(f"Relatório para **{sigla}** gerado.")
 
-                            else:
-                                st.error("Por favor, forneça um template (colando o texto ou carregando o arquivo).")
+                                else:
+                                    st.error("Por favor, forneça um template (colando o texto ou carregando o arquivo).")
 
                 st.session_state.download_files['relatorios_individuais_zip'] = zip_buffer.getvalue()
             st.success("Geração de relatórios concluída!")

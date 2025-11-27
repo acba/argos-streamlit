@@ -7,7 +7,7 @@ from google.genai import types
 from docxtpl import InlineImage
 from docx.shared import Mm
 import logging
-
+from datetime import date
 
 def carregar_dados(filepath, sheet_name=0, skiprows=2):
     """Lê um arquivo Excel e retorna um DataFrame, tratando erros."""
@@ -269,3 +269,23 @@ def avalia_gemini(client, prompt_text: str, modelo, temperature, response_format
 
     except Exception as e:
         return None, f"Erro ao chamar a API Gemini: {e}"
+
+def data_hoje_abnt():
+    hoje = date.today()
+
+    # Lista de meses ABNT (Jan. Fev. Mar. Abr. Maio Jun. Jul. Ago. Set. Out. Nov. Dez.)
+    # Note que 'maio' não tem ponto e é minúsculo na citação direta,
+    # mas aqui usaremos minúsculo padrão.
+    meses_abnt = {
+        1: 'jan.', 2: 'fev.', 3: 'mar.', 4: 'abr.', 5: 'maio', 6: 'jun.',
+        7: 'jul.', 8: 'ago.', 9: 'set.', 10: 'out.', 11: 'nov.', 12: 'dez.'
+    }
+
+    dia = hoje.day
+    mes = meses_abnt[hoje.month]
+    ano = hoje.year
+
+    return f"{dia} {mes} {ano}"
+
+def data_hoje():
+    return date.today().strftime("%d/%m/%Y")

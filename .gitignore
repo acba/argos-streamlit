@@ -16,3 +16,6 @@ TODO
 req.txt
 instalar_dep.txt
 prototipo.ipynb
+*.ipynb
+*.lss
+package-lock.json
