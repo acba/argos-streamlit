@@ -8,7 +8,6 @@ from docxtpl import InlineImage
 from docx.shared import Mm, Pt
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.enum.table import WD_TABLE_AUTOFORMAT
 import logging
 from datetime import date
 
@@ -250,10 +249,10 @@ def processar_quebras_pagina(template_str: str) -> str:
     """
     # Bloco nativo do OpenXML para quebra de página
     pagebreak_openxml = "\n```{=openxml}\n<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n```\n"
-    
+
     # Regex para encontrar \newpage (aceitando espaços extras ou chaves vazias opcionais)
     regex_newpage = r"\\newpage(?:\{\})?"
-    
+
     return re.sub(regex_newpage, pagebreak_openxml, template_str)
 
 def cross_ref_tabelas(template_str: str) -> str:
@@ -385,14 +384,14 @@ def aplicar_estilo_tabelas(docx_path, font_name='Calibri', header_size=10, body_
             for i, row in enumerate(table.rows):
                 is_header = (i == 0)
                 font_size = Pt(header_size) if is_header else Pt(body_size)
-                
+
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
                         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
                         for run in paragraph.runs:
                             run.font.name = font_name
                             run.font.size = font_size
-                        
+
         doc.save(docx_path)
         return True
     except Exception as e:
