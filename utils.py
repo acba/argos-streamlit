@@ -5,7 +5,10 @@ import jinja2
 from jinja2 import Environment, BaseLoader, StrictUndefined
 from google.genai import types
 from docxtpl import InlineImage
-from docx.shared import Mm
+from docx.shared import Mm, Pt
+from docx import Document
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.enum.table import WD_TABLE_AUTOFORMAT
 import logging
 from datetime import date
 
@@ -240,6 +243,82 @@ def cross_ref_figuras(template_str: str) -> str:
 
     return texto_processado
 
+def processar_quebras_pagina(template_str: str) -> str:
+    """
+    Substitui o comando LaTeX \newpage por um bloco Raw OpenXML
+    que o Pandoc entende e converte corretamente para quebra de página no Word.
+    """
+    # Bloco nativo do OpenXML para quebra de página
+    pagebreak_openxml = "\n```{=openxml}\n<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n```\n"
+    
+    # Regex para encontrar \newpage (aceitando espaços extras ou chaves vazias opcionais)
+    regex_newpage = r"\\newpage(?:\{\})?"
+    
+    return re.sub(regex_newpage, pagebreak_openxml, template_str)
+
+def cross_ref_tabelas(template_str: str) -> str:
+    """
+    Processa um template de texto para numerar automaticamente as referências
+    de tabelas e modificar as legendas das tabelas, seguindo o padrão de
+    cross_ref_figuras.
+    """
+
+    # --- Passa 1: Mapeamento ---
+
+    tabela_map = {}
+    contador = 1
+
+    # Regex combinada para encontrar declarações e referências
+    regex_combinado = r"(?:\{#tbl:([^#]+)#\}|\[@tbl:([^\]]+)\])"
+
+    for match in re.finditer(regex_combinado, template_str):
+        id_declaracao = match.group(1)
+        id_referencia = match.group(2)
+        tbl_id = id_declaracao if id_declaracao else id_referencia
+
+        if tbl_id and tbl_id not in tabela_map:
+            tabela_map[tbl_id] = contador
+            contador += 1
+
+    if not tabela_map:
+        return template_str
+
+    # --- Passa 2: Substituições ---
+
+    texto_processado = template_str
+
+    # 1. Substituir referências de TEXTO
+    regex_ref_texto = r"\[@tbl:([^\]]+)\]"
+
+    def substituir_ref_texto(match):
+        tbl_id = match.group(1)
+        if tbl_id in tabela_map:
+            return f"Tabela {tabela_map[tbl_id]}"
+        return match.group(0)
+
+    texto_processado = re.sub(regex_ref_texto, substituir_ref_texto, texto_processado)
+
+    # 2. Modificar legendas de Tabela
+    # Padrão esperado: ": Legenda da Tabela {#tbl:ID#}" OU "Table: Legenda..."
+    # (?m) habilita multiline para ^ coincidir com início da linha
+    regex_legenda = r"(?m)^(:|Table:)\s*(.*?)\s*\{#tbl:([^#]+)#\}"
+
+    def modificar_legenda_tabela(match):
+        prefix = match.group(1) # ":" ou "Table:"
+        caption = match.group(2)
+        tbl_id = match.group(3)
+
+        if tbl_id in tabela_map:
+            numero = tabela_map[tbl_id]
+            # Reconstrói mantendo o formato que o Pandoc espera para criar a legenda corretamente
+            return f"{prefix} Tabela {numero} - {caption} {{#tbl:{tbl_id}#}}"
+
+        return match.group(0)
+
+    texto_processado = re.sub(regex_legenda, modificar_legenda_tabela, texto_processado)
+
+    return texto_processado
+
 
 def avalia_gemini(client, prompt_text: str, modelo, temperature, response_format_choice, file_objects = []):
     """
@@ -289,3 +368,33 @@ def data_hoje_abnt():
 
 def data_hoje():
     return date.today().strftime("%d/%m/%Y")
+
+def aplicar_estilo_tabelas(docx_path, font_name='Calibri', header_size=10, body_size=9):
+    """
+    Aplica estilos específicos às tabelas de um arquivo DOCX:
+    - Cabeçalho: Fonte parametrizada (padrão Calibri), tamanho parametrizado (padrão 10)
+    - Corpo: Fonte parametrizada (padrão Calibri), tamanho parametrizado (padrão 9)
+    - Alinhamento: Justificado para todo o conteúdo
+    """
+    try:
+        doc = Document(docx_path)
+        for table in doc.tables:
+            # Aplicar "ajustar-se automaticamente ao conteúdo"
+            table.autofit = True # or WD_TABLE_AUTOFORMAT.AUTOFIT_CONTENTS if needed but True is often sufficient
+
+            for i, row in enumerate(table.rows):
+                is_header = (i == 0)
+                font_size = Pt(header_size) if is_header else Pt(body_size)
+                
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+                        for run in paragraph.runs:
+                            run.font.name = font_name
+                            run.font.size = font_size
+                        
+        doc.save(docx_path)
+        return True
+    except Exception as e:
+        st.error(f"Erro ao aplicar estilo nas tabelas: {e}")
+        return False
