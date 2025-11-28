@@ -34,6 +34,7 @@ gera_relatorios_individuais_page = st.Page('pages/gera_relatorios_individuais.py
 gera_anexo_evidencias_page = st.Page('pages/gera_anexo_evidencias.py', title="Gera Anexo Evidências")
 
 gera_questionario_comentarios_gestor_page = st.Page('pages/gera_questionario_comentarios_gestor.py', title="Gera Questionários do Comentários do Gestor")
+gera_anexos_comentarios_gestor_page = st.Page('pages/gera_anexos_comentarios_gestor.py', title="Gera Anexos de Comentários do Gestor")
 
 analise_gemini_auditados_page = st.Page('pages/analise_gemini.py', title="Análise de Auditados com IA")
 analise_ia_geral_page = st.Page('pages/analise_ia_geral.py', title="Análise Geral com IA")
@@ -49,7 +50,7 @@ navigation_items = {
 if st.session_state.audit_completed:
     navigation_items["Procedimentos"].append(visualiza_resultados_page)
     navigation_items["Relatório"].extend([gera_relatorios_individuais_page, gera_anexo_evidencias_page])
-    navigation_items["Comentários do Gestor"].extend([gera_questionario_comentarios_gestor_page])
+    navigation_items["Comentários do Gestor"].extend([gera_questionario_comentarios_gestor_page, gera_anexos_comentarios_gestor_page])
     navigation_items["Análise IA"].append(analise_gemini_auditados_page)
 
 pg = st.navigation(navigation_items)
