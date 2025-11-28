@@ -318,6 +318,13 @@ def cross_ref_tabelas(template_str: str) -> str:
 
     return texto_processado
 
+def substituir_underline_pandoc(text: str) -> str:
+    """
+    Substitui texto envolvido por __ pela sintaxe de underline do Pandoc:
+    __texto__ -> [texto]{.underline}
+    """
+    return re.sub(r"__(.+?)__", r"[\1]{.underline}", text)
+
 
 def avalia_gemini(client, prompt_text: str, modelo, temperature, response_format_choice, file_objects = []):
     """

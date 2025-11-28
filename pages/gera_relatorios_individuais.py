@@ -14,7 +14,7 @@ from jinja2 import Environment, BaseLoader, StrictUndefined, exceptions
 
 from classes import gerar_tabela_achados
 from utils import get_variaveis_template, StreamlitLogHandler, processa_imagens_contexto, cross_ref_figuras, cross_ref_tabelas,\
-data_hoje_abnt, data_hoje, aplicar_estilo_tabelas, processar_quebras_pagina
+data_hoje_abnt, data_hoje, aplicar_estilo_tabelas, processar_quebras_pagina, substituir_underline_pandoc
 
 st.set_page_config(page_title="Gera Relatórios Individuais", layout="wide")
 
@@ -266,9 +266,10 @@ if st.session_state.audit_completed:
                                         try:
                                             # Processa as imagens para o contexto do Markdown
                                             contexto = processa_imagens_contexto(contexto, context_files_path_map, 'md')
-                                            template_content_local = cross_ref_figuras(template_content)
+                                            template_content_local = cross_ref_figuras(template_content_local)
                                             template_content_local = cross_ref_tabelas(template_content_local)
                                             template_content_local = processar_quebras_pagina(template_content_local)
+                                            template_content_local = substituir_underline_pandoc(template_content_local)
 
                                             template_md = env.from_string(template_content_local)
                                             conteudo_final_md = template_md.render(contexto)
