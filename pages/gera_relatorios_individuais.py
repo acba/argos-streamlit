@@ -266,7 +266,7 @@ if st.session_state.audit_completed:
                                         try:
                                             # Processa as imagens para o contexto do Markdown
                                             contexto = processa_imagens_contexto(contexto, context_files_path_map, 'md')
-                                            template_content_local = cross_ref_figuras(template_content_local)
+                                            template_content_local = cross_ref_figuras(template_content)
                                             template_content_local = cross_ref_tabelas(template_content_local)
                                             template_content_local = processar_quebras_pagina(template_content_local)
                                             template_content_local = substituir_underline_pandoc(template_content_local)
