@@ -7,6 +7,8 @@ import pypandoc
 import docx
 import os
 import tempfile
+import re
+import ast
 
 from docxtpl import DocxTemplate, RichText, InlineImage
 from docx.shared import Mm
@@ -15,6 +17,32 @@ from jinja2 import Environment, BaseLoader, StrictUndefined, exceptions
 from classes import gerar_tabela_achados
 from utils import get_variaveis_template, StreamlitLogHandler, processa_imagens_contexto, cross_ref_figuras, cross_ref_tabelas,\
 data_hoje_abnt, data_hoje, aplicar_estilo_tabelas, processar_quebras_pagina, substituir_underline_pandoc
+
+def consolidar_templates(base_content, all_files_content, processed_files=None):
+    """
+    Consolida templates substituindo tags {% include 'arquivo' %} pelo conteúdo do arquivo.
+    """
+    if processed_files is None:
+        processed_files = set()
+
+    # Regex para identificar tags de include: {% include 'arquivo.md' %} ou {% include "arquivo.md" %}
+    # Captura o nome do arquivo dentro das aspas.
+    pattern = re.compile(r"\{%-?\s*include\s+['\"](.+?)['\"]\s*-?%\}")
+
+    def replace_match(match):
+        filename = match.group(1)
+        if filename in all_files_content:
+            if filename in processed_files:
+                return f"<!-- ERRO: Ciclo de inclusão detectado para '{filename}' -->"
+
+            new_processed = processed_files.copy()
+            new_processed.add(filename)
+
+            return consolidar_templates(all_files_content[filename], all_files_content, new_processed)
+        else:
+            return f"<!-- ERRO: Arquivo '{filename}' não encontrado nos uploads -->"
+
+    return pattern.sub(replace_match, base_content)
 
 st.set_page_config(page_title="Gera Relatórios Individuais", layout="wide")
 
@@ -36,6 +64,34 @@ if st.session_state.audit_completed:
         st.dataframe(df_achados, height=200)
 
     st.subheader("1. Forneça dados de contexto adicionais (Opcional)")
+
+    with st.expander("Como funciona o Contexto Adicional?"):
+        st.markdown("""
+        Você pode fazer upload de planilhas Excel (`.xlsx`) para enriquecer o relatório com dados específicos de cada auditado.
+
+        **Regras Básicas:**
+        1. A planilha deve ter uma coluna chamada **`sigla`**. Esta coluna será usada para vincular os dados ao auditado correto.
+        2. Cada outra coluna se tornará uma **variável** disponível no seu template Jinja2.
+           - Ex: Uma coluna `gerente_responsavel` pode ser acessada no template como `{{ gerente_responsavel }}`.
+
+        **Funcionalidade Avançada (Colunas com `*`):**
+        Se o nome de uma coluna terminar com um asterisco (ex: `lista_pendencias*`), o sistema tentará interpretar o conteúdo das células dessa coluna como **estruturas de dados Python** (listas, dicionários, tuplas), em vez de simples textos.
+
+        - **Exemplo na planilha:**
+          - Coluna: `itens_revisados*`
+          - Célula: `['Item A', 'Item B', 'Item C']`
+
+        - **Uso no Template:**
+          Como a variável agora é uma lista real, você pode iterar sobre ela:
+          ```jinja
+          Itens revisados:
+          {% for item in itens_revisados_ %}
+          - {{ item }}
+          {% endfor %}
+          ```
+        *Nota: O asterisco é removido do nome da variável final.*
+        """)
+
     arquivos_contexto = st.file_uploader("Carregar Planilhas de Contexto (.xlsx)", type=["xlsx"], accept_multiple_files=True, help="As planilhas devem ter uma coluna 'sigla' para identificar o auditado.")
     df_contexto_extra = None
     if arquivos_contexto:
@@ -48,6 +104,16 @@ if st.session_state.audit_completed:
                 if 'sigla' in df_temp.columns:
                     df_temp = df_temp.set_index('sigla')
                     df_temp.columns = [col.strip() for col in df_temp.columns]
+
+                    # Processa colunas especiais terminadas em '*'
+                    for col in df_temp.columns:
+                        if col.endswith('*'):
+                            try:
+                                df_temp[col] = df_temp[col].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+                                # Remove o asterisco do nome da coluna
+                                df_temp.rename(columns={col: col.rstrip('*')}, inplace=True)
+                            except Exception as e:
+                                st.warning(f"Falha ao converter coluna especial '{col}' no arquivo '{arq.name}': {e}")
 
                     # Rastreia colunas para identificar duplicatas
                     for col in df_temp.columns:
@@ -86,7 +152,7 @@ if st.session_state.audit_completed:
 
         ##### Atributos
         - nome (str): O nome completo da entidade auditada.
-        - sigla (str): A sigla ou nome curto da entidade, usada como chave principal na maioria das operações.
+        - sigla (str): A sigla ou nome completo da entidade, usada como chave principal na maioria das operações.
         - foi_auditado (bool): Uma flag que se torna True após a execução dos procedimentos de auditoria para esta entidade.
         - procedimentos_executados (list): Uma lista que armazena cópias dos objetos ProcedimentoAuditoria que foram executados para este auditado, contendo os resultados específicos (ações, situações encontradas, etc.).
         - tem_achados (bool): Uma flag que se torna True se qualquer um dos procedimentos executados resultar em um achado.
@@ -162,23 +228,63 @@ if st.session_state.audit_completed:
 
         ---
 
+        #### 4. Inclusão de Templates (apenas .md)
+        Você pode dividir seu template em vários arquivos e incluí-los usando `{% include %}`.
+
+        **Exemplo:**
+        ```jinja
+        {% include 'cabecalho.md' %}
+
+        Conteúdo principal...
+
+        {% include 'rodape.md' %}
+        ```
+        Certifique-se de fazer o upload de todos os arquivos referenciados.
+
+        ---
+
         **Para templates `.docx` (docxtpl):** A sintaxe é idêntica. Você insere as tags `{{ ... }}` e `{% ... %}` diretamente no seu documento Word. Para criar uma tabela dinâmica, por exemplo, coloque a tag `{% for ... %}` na primeira célula de uma linha e a tag `{% endfor %}` na última célula da mesma linha. O `docxtpl` irá replicar a linha para cada item na sua lista.
         ''')
 
     col1, col2 = st.columns(2)
     with col1:
-        arquivo_template_md = st.file_uploader("Carregue um arquivo de template (.md, .jinja)", type=["md", "jinja"])
+        arquivos_template_md = st.file_uploader("Carregue arquivos de template (.md, .jinja)", type=["md", "jinja"], accept_multiple_files=True)
     with col2:
         arquivo_template_docx = st.file_uploader("Carregue um arquivo de template (.docx)", type=["docx"])
 
     template_content = None
-    if arquivo_template_md:
-        try:
-            template_content = arquivo_template_md.read().decode('utf-8')
-        except Exception as e:
-            st.error(f"Erro ao ler o arquivo .md: {e}")
+    template_type = None
 
-    if arquivo_template_docx:
+    if arquivos_template_md:
+        template_type = 'md'
+        template_files = {}
+        for arquivo in arquivos_template_md:
+            try:
+                template_files[arquivo.name] = arquivo.read().decode('utf-8')
+            except Exception as e:
+                st.error(f"Erro ao ler o arquivo {arquivo.name}: {e}")
+
+        if template_files:
+            base_filename = None
+            if len(template_files) > 1:
+                # Detecta automaticamente o arquivo base (aquele com mais 'includes')
+                include_pattern = re.compile(r"\{%-?\s*include\s+['\"](.+?)['\"]\s*-?%\}")
+                base_filename = max(template_files, key=lambda k: len(include_pattern.findall(template_files[k])))
+                st.info(f"Arquivo base detectado automaticamente: **{base_filename}**")
+            else:
+                base_filename = list(template_files.keys())[0]
+
+            if base_filename:
+                try:
+                    template_content = consolidar_templates(template_files[base_filename], template_files)
+                except RecursionError:
+                    st.error("Erro: Loop infinito de inclusão de templates detectado.")
+                except Exception as e:
+                    st.error(f"Erro na consolidação: {e}")
+
+    # Se não for MD, verifica se é DOCX
+    if not template_content and arquivo_template_docx:
+        template_type = 'docx'
         try:
             doc = docx.Document(arquivo_template_docx)
             template_content = "\n".join([para.text for para in doc.paragraphs])
@@ -187,7 +293,7 @@ if st.session_state.audit_completed:
             st.error(f"Erro ao ler o arquivo .docx: {e}")
 
     if template_content:
-        with st.expander("Conteúdo do template:"):
+        with st.expander("Conteúdo do template consolidado:"):
             st.code(template_content)
 
         vars_template = get_variaveis_template(template_content)
@@ -262,7 +368,7 @@ if st.session_state.audit_completed:
                                         for var in vars_faltantes:
                                             contexto[var] = []
 
-                                    if arquivo_template_md:
+                                    if template_type == 'md':
                                         try:
                                             # Processa as imagens para o contexto do Markdown
                                             contexto = processa_imagens_contexto(contexto, context_files_path_map, 'md')
@@ -307,7 +413,7 @@ if st.session_state.audit_completed:
                                             st.error(f"**Erro no template para `{sigla}`:** A variável `{e.message.split(' is undefined')[0]}` não foi encontrada.")
                                         except Exception as e:
                                             st.error(f"Erro ao gerar relatório para **{sigla}**: {e}")
-                                    elif arquivo_template_docx:
+                                    elif template_type == 'docx':
                                         try:
                                             base_docx = DocxTemplate(arquivo_template_docx)
                                             # Processa as imagens para o contexto do DOCX
