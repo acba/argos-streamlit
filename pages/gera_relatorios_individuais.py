@@ -320,7 +320,8 @@ if st.session_state.audit_completed:
                 with st.spinner(f"Gerando {len(siglas_selecionadas)} relatórios individuais..."):
                     # --- Lógica para lidar com arquivos de contexto (incluindo ZIP) ---
                     env = Environment(loader=BaseLoader(), undefined=StrictUndefined)
-                    template_ref_docx = 'docs/template-relatorio-individual.docx'
+                    # template_ref_docx = 'docs/template-relatorio-individual.docx'
+                    template_ref_docx = 'docs/template-base-estilos.docx'
                     generation_log = st.expander("Log de Geração", expanded=True)
                     zip_buffer = io.BytesIO()
 
