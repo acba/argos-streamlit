@@ -318,6 +318,15 @@ def cross_ref_tabelas(template_str: str) -> str:
 
     return texto_processado
 
+
+def substituir_underline_preview(text: str) -> str:
+    """
+    Substitui texto envolvido por __ pela sintaxe de underline HTML:
+    __texto__ -> <u>texto</u>
+    """
+    return re.sub(r"__(.+?)__", r"<u>\1</u>", text)
+
+
 def substituir_underline_pandoc(text: str) -> str:
     """
     Substitui texto envolvido por __ pela sintaxe de underline do Pandoc:
