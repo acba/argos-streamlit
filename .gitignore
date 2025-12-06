@@ -7,6 +7,7 @@ __pycache__/
 pycache/*
 __pycache__/*
 venv/
+.venv/
 *.pkl
 inspect_pkl.py
 *.svg

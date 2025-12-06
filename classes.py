@@ -6,7 +6,7 @@ import pandas as pd
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
-from utils import avalia_expressao
+from utils import avalia_expressao, avalia_logica
 
 class FonteInformacao:
     contador = 1  # Contador de instâncias para automatizar o identificador
@@ -184,7 +184,7 @@ class ProcedimentoAuditoria:
         resultados = {acao.id: acao.resultado for acao in self.acoes_verificacao}
 
         # Avalia a lógica do achado com os resultados das ações
-        achado_ocorreu = eval(self.logica_achado, {}, resultados)
+        achado_ocorreu = avalia_logica(self.logica_achado, resultados)
 
         self.executado = True
 

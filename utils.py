@@ -85,53 +85,139 @@ def infix_to_rpn(tokens):
 
     return list(filter(lambda x: x != '', output))
 
+def safe_compare(value, condition):
+    """
+    Compara um valor com uma condição de forma segura (sem eval).
+    Suporta: >, <, >=, <=, ==, != e igualdade implícita.
+    """
+    condition = str(condition).strip()
+    value_str = str(value).strip()
+
+    # Operadores suportados
+    operators = {
+        '>=': lambda x, y: x >= y,
+        '<=': lambda x, y: x <= y,
+        '!=': lambda x, y: x != y,
+        '==': lambda x, y: x == y,
+        '>': lambda x, y: x > y,
+        '<': lambda x, y: x < y
+    }
+
+    # Tenta encontrar um operador no início da condição
+    # Ordenamos chaves pelo tamanho decrescente para pegar >= antes de >
+    for op_symbol in sorted(operators.keys(), key=len, reverse=True):
+        if condition.startswith(op_symbol):
+            target_str = condition[len(op_symbol):].strip()
+            
+            # Tenta comparação numérica
+            try:
+                val_num = float(value)
+                target_num = float(target_str)
+                return operators[op_symbol](val_num, target_num)
+            except ValueError:
+                # Comparação de strings (remove aspas se houver)
+                target_clean = target_str.strip("'\"")
+                return operators[op_symbol](value_str, target_clean)
+    
+    # Se não houver operador, assume igualdade (==)
+    # Remove aspas se o usuário tiver colocado (ex: 'Sim')
+    target_clean = condition.strip("'\"")
+    # Tenta comparar como número se ambos forem numéricos e a condição for apenas um número
+    try:
+        val_num = float(value)
+        target_num = float(target_clean)
+        return val_num == target_num
+    except ValueError:
+        pass
+        
+    return value_str == target_clean
+
+def avalia_logica(expressao, contexto):
+    """
+    Avalia uma expressão lógica (ex: 'AV01 & AV02') dado um contexto 
+    (dicionário de resultados { 'AV01': True, ... }).
+    """
+    if not expressao:
+        return False
+        
+    tokens = parse_expression(str(expressao))
+    rpn = infix_to_rpn(tokens)
+    
+    pilha = []
+    
+    for token in rpn:
+        if token == '|':
+            if len(pilha) < 2: raise ValueError("Expressão mal formada (operador |)")
+            y = pilha.pop()
+            x = pilha.pop()
+            pilha.append(x or y)
+        elif token == '&':
+            if len(pilha) < 2: raise ValueError("Expressão mal formada (operador &)")
+            y = pilha.pop()
+            x = pilha.pop()
+            pilha.append(x and y)
+        elif token == '~':
+            if len(pilha) < 1: raise ValueError("Expressão mal formada (operador ~)")
+            x = pilha.pop()
+            pilha.append(not x)
+        else:
+            # Token é uma chave no contexto (ex: AV01)
+            val = contexto.get(token, False) # Default False se não achar
+            pilha.append(val)
+            
+    if len(pilha) == 1:
+        return pilha[0]
+    else:
+        # Se sobrou mais de um item, expressão pode estar incompleta, mas retornamos o topo
+        return pilha[0]
+
 def avalia_expressao(expressao_achado, situacao_encontrada, debug=False):
     expressao_achado = str(expressao_achado)
-    situacao_encontrada = str(situacao_encontrada)
+    # situacao_encontrada pode ser int/float/str, mantemos o tipo original para safe_compare tentar converter
 
-    # Primeiro tenta se é o caso de um eval
-    try:
-        if debug:
-            print(f"Testando se {situacao_encontrada} {expressao_achado} = {eval(f'{situacao_encontrada} {expressao_achado}')}")
-        return eval(f'{situacao_encontrada} {expressao_achado}')
-    except Exception as e:
-        parsed_tokens = parse_expression(expressao_achado)
-        tokens = infix_to_rpn(parsed_tokens)
+    parsed_tokens = parse_expression(expressao_achado)
+    tokens = infix_to_rpn(parsed_tokens)
 
-        #print(tokens)
+    if debug:
+        print(f"Avalia Expressão: '{expressao_achado}' vs '{situacao_encontrada}'")
+        print(f"Tokens RPN: {tokens}")
 
-        pilha = []
+    pilha = []
 
-        for token in tokens:
-            if token == '|':
-                # Operador OR
-                y = pilha.pop()
-                x = pilha.pop()
-                pilha.append(x or y)
-            elif token == '&':
-                # Operador AND
-                y = pilha.pop()
-                x = pilha.pop()
-                pilha.append(x and y)
-            elif token == '~':
-                x = pilha.pop()
-                pilha.append(not x)
-            else:
-                # Aqui se remove o '.' no final da string pois não está padronizada as respostas.
-                # Assim, encontra-se resposta terminando em '.' como 'Não adota' ou 'Não adota.'
-                a = re.sub(r'\.$', '', token)
-                b = re.sub(r'\.$', '', situacao_encontrada)
-                if debug:
-                    print(f"    Checa se {a} == {b} - ", a == b)
-                pilha.append(a == b)
-
-        if len(pilha) == 1:
-            if debug:
-                print('        Achado:', pilha[0])
-
-            return pilha[0]
+    for token in tokens:
+        if token == '|':
+            if len(pilha) < 2: raise ValueError("Expressão mal formada (operador |)")
+            y = pilha.pop()
+            x = pilha.pop()
+            pilha.append(x or y)
+        elif token == '&':
+            if len(pilha) < 2: raise ValueError("Expressão mal formada (operador &)")
+            y = pilha.pop()
+            x = pilha.pop()
+            pilha.append(x and y)
+        elif token == '~':
+            if len(pilha) < 1: raise ValueError("Expressão mal formada (operador ~)")
+            x = pilha.pop()
+            pilha.append(not x)
         else:
-            raise ValueError("Expressão lógica inválida")
+            # O token é uma condição simples (ex: "> 10" ou "Sim")
+            # Removemos o '.' no final que às vezes vem da planilha
+            condition = re.sub(r'\.$', '', token)
+            
+            # Usamos safe_compare para validar
+            resultado = safe_compare(situacao_encontrada, condition)
+            
+            if debug:
+                print(f"    Comparando: Val='{situacao_encontrada}' Cond='{condition}' -> {resultado}")
+            
+            pilha.append(resultado)
+
+    if len(pilha) >= 1:
+        if debug:
+            print('        Resultado Final:', pilha[0])
+        return pilha[0]
+    else:
+        raise ValueError("Expressão lógica inválida ou vazia")
 
 def processa_imagens_contexto(contexto, context_files_path_map, template_type, base_docx=None):
     """Substitui nomes de arquivos de imagem no contexto pelos caminhos ou objetos de imagem apropriados."""
