@@ -1,12 +1,24 @@
 import os
 import re
 import copy
-import pickle
 import pandas as pd
+import numpy as np
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
 from utils import avalia_expressao, avalia_logica
+
+def safe_serialize(obj):
+    """Helper to serialize numpy/pandas types to native Python types."""
+    if isinstance(obj, (np.integer, np.int64)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64)):
+        return float(obj) if not pd.isna(obj) else None
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif pd.isna(obj):
+        return None
+    return obj
 
 class FonteInformacao:
     contador = 1  # Contador de instâncias para automatizar o identificador
@@ -40,6 +52,23 @@ class FonteInformacao:
                 msg = f"O arquivo carregado não pôde ser lido como planilha Excel: {e}"
             raise IOError(msg)
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'descricao': self.descricao,
+            'filepath': self.filepath,
+            'chave_jurisdicionado': self.chave_jurisdicionado
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            id=data.get('id'),
+            descricao=data.get('descricao'),
+            filepath=data.get('filepath'),
+            chave_jurisdicionado=data.get('chave_jurisdicionado')
+        )
+
 class Achado:
     def __init__(self, numero, nome, situacoes_encontradas=None, evidencias=None, encaminhamentos=None):
         self.numero = numero
@@ -50,6 +79,25 @@ class Achado:
 
     def __repr__(self):
         return  f"Achado(numero='{self.numero}', nome='{self.nome}')"
+
+    def to_dict(self):
+        return {
+            'numero': self.numero,
+            'nome': self.nome,
+            'situacoes_encontradas': [safe_serialize(s) for s in self.situacoes_encontradas],
+            'evidencias': [safe_serialize(e) for e in self.evidencias],
+            'encaminhamentos': self.encaminhamentos
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            numero=data.get('numero'),
+            nome=data.get('nome'),
+            situacoes_encontradas=data.get('situacoes_encontradas'),
+            evidencias=data.get('evidencias'),
+            encaminhamentos=data.get('encaminhamentos')
+        )
 
 class AcaoVerificacao:
     contador = 1  # Contador de instâncias para automatizar o identificador
@@ -87,7 +135,8 @@ class AcaoVerificacao:
 
 
     def __repr__(self):
-        return (f"AcaoVerificacao(id='{self.id}', fonte_informacao='{self.fonte_informacao}', \n"
+        return (
+                f"AcaoVerificacao(id='{self.id}', fonte_informacao='{self.fonte_informacao}', \n"
                 f"informacao_requerida='{self.informacao_requerida}', criterio='{self.criterio}', descricao_evidencia='{self.descricao_evidencia}')\n"
                 f"situacao_inconforme='{self.situacao_inconforme}', tipo_encaminhamento='{self.tipo_encaminhamento}')\n"
                 f"descricao_situacao_inconforme='{self.descricao_situacao_inconforme}', acao_exclusiva_auditados='{self.acao_exclusiva_auditados}')\n"
@@ -113,7 +162,7 @@ class AcaoVerificacao:
                 print(f'ERROR: Não foi possível encontrar o campo "{self.informacao_requerida}" na fonte de informação.')
                 print(f'ERROR: Ajuste o campo ou a fonte.')
                 # return self
-                raise ValueError(f'Na Ação de Verificação "{self.id}", não foi possível encontrar a coluna "{info_requerida}" na fonte de informação "{self.fonte_informacao.descricao}". '
+                raise ValueError(f'Na Ação de Verificação "{self.id}", não foi possível encontrar a coluna "{info_requerida}" na fonte de informação "{self.fonte_informacao.descricao}". ')
                                  f'Verifique se o nome da coluna está correto no "mapa-verificacao-achados.xlsx".')
 
         # Realiza a busca e a verificação para cada campo especificado
@@ -141,6 +190,48 @@ class AcaoVerificacao:
 
         return self
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'fonte_informacao': self.fonte_informacao.to_dict(),
+            'informacao_requerida': self.informacao_requerida,
+            'criterio': self.criterio,
+            'descricao_evidencia': self.descricao_evidencia,
+            'situacao_inconforme': self.situacao_inconforme,
+            'tipo_encaminhamento': self.tipo_encaminhamento,
+            'encaminhamento': self.encaminhamento,
+            'pre_encaminhamento': self.pre_encaminhamento,
+            'descricao_situacao_inconforme': self.descricao_situacao_inconforme,
+            'acao_exclusiva_auditados': safe_serialize(self.acao_exclusiva_auditados),
+            'auditado_inexistente_e_achado': safe_serialize(self.auditado_inexistente_e_achado),
+            'descricao_auditado_inexistente': self.descricao_auditado_inexistente,
+            'situacao_encontrada_nan_e_achado': self.situacao_encontrada_nan_e_achado,
+            'situacao_encontrada': safe_serialize(self.situacao_encontrada),
+            'resultado': bool(self.resultado) if self.resultado is not None else None
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        obj = cls(
+            id=data.get('id'),
+            fonte_informacao=FonteInformacao.from_dict(data.get('fonte_informacao')),
+            informacao_requerida=data.get('informacao_requerida'),
+            criterio=data.get('criterio'),
+            descricao_evidencia=data.get('descricao_evidencia'),
+            situacao_inconforme=data.get('situacao_inconforme'),
+            tipo_encaminhamento=data.get('tipo_encaminhamento'),
+            encaminhamento=data.get('encaminhamento'),
+            pre_encaminhamento=data.get('pre_encaminhamento'),
+            descricao_situacao_inconforme=data.get('descricao_situacao_inconforme'),
+            acao_exclusiva_auditados=data.get('acao_exclusiva_auditados'),
+            auditado_inexistente_e_achado=data.get('auditado_inexistente_e_achado'),
+            descricao_auditado_inexistente=data.get('descricao_auditado_inexistente'),
+            situacao_encontrada_nan_e_achado=data.get('situacao_encontrada_nan_e_achado')
+        )
+        obj.situacao_encontrada = data.get('situacao_encontrada')
+        obj.resultado = data.get('resultado')
+        return obj
+
 class ProcedimentoAuditoria:
     contador = 1  # Contador de instâncias para automatizar o identificador
 
@@ -163,12 +254,12 @@ class ProcedimentoAuditoria:
         self.achado_ocorreu = None
 
     def __repr__(self):
-        return  f"ProcedimentoAuditoria(id='{self.id}', \n" + \
-                f"descricao='{self.descricao}'\n" + \
-                f"executado='{self.executado}'\n" + \
-                f"logica_achado='{self.logica_achado}'\n" +\
-                f"achado_ocorreu='{self.achado_ocorreu}'\n" +\
-                f"achado='{self.achado}'\n" +\
+        return  f"ProcedimentoAuditoria(id='{self.id}', \n" +
+                f"descricao='{self.descricao}'\n" +
+                f"executado='{self.executado}'\n" +
+                f"logica_achado='{self.logica_achado}'\n" +
+                f"achado_ocorreu='{self.achado_ocorreu}'\n" +
+                f"achado='{self.achado}'\n" +
                 f"acoes_verificacao ('{len(self.acoes_verificacao)}')\n" #+ "\n".join([f"{acao}" for acao in self.acoes_verificacao])
 
 
@@ -245,6 +336,34 @@ class ProcedimentoAuditoria:
 
         return self
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'descricao': self.descricao,
+            'logica_achado': self.logica_achado,
+            'numero_achado': self.numero_achado,
+            'nome_achado': self.nome_achado,
+            'executado': self.executado,
+            'acoes_verificacao': [acao.to_dict() for acao in self.acoes_verificacao],
+            'achado': self.achado.to_dict() if self.achado else None,
+            'achado_ocorreu': self.achado_ocorreu
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        obj = cls(
+            id=data.get('id'),
+            descricao=data.get('descricao'),
+            logica_achado=data.get('logica_achado'),
+            numero_achado=data.get('numero_achado'),
+            nome_achado=data.get('nome_achado')
+        )
+        obj.executado = data.get('executado')
+        obj.acoes_verificacao = [AcaoVerificacao.from_dict(av) for av in data.get('acoes_verificacao', [])]
+        obj.achado = Achado.from_dict(data.get('achado')) if data.get('achado') else None
+        obj.achado_ocorreu = data.get('achado_ocorreu')
+        return obj
+
 class Auditado:
     contador = 1  # Contador de instâncias para automatizar o identificador
 
@@ -263,9 +382,9 @@ class Auditado:
         self.tem_achados = False
 
     def __repr__(self):
-        return f"Auditado(id='{self.id}', sigla='{self.sigla}')\n" + \
-                f"nome='{self.nome}'\n" + \
-                f"foi_auditado='{self.foi_auditado}'\n" + \
+        return f"Auditado(id='{self.id}', sigla='{self.sigla}')\n" +
+                f"nome='{self.nome}'\n" +
+                f"foi_auditado='{self.foi_auditado}'\n" +
                 f"tem_achados='{self.tem_achados}'\n"
 
     def __aplicar_procedimento(self, procedimento, debug=False):
@@ -504,6 +623,28 @@ class Auditado:
 
         return doc
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'sigla': self.sigla,
+            'foi_auditado': self.foi_auditado,
+            'tem_achados': self.tem_achados,
+            'procedimentos_executados': [p.to_dict() for p in self.procedimentos_executados]
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        obj = cls(
+            id=data.get('id'),
+            nome=data.get('nome'),
+            sigla=data.get('sigla')
+        )
+        obj.foi_auditado = data.get('foi_auditado')
+        obj.tem_achados = data.get('tem_achados')
+        obj.procedimentos_executados = [ProcedimentoAuditoria.from_dict(p) for p in data.get('procedimentos_executados', [])]
+        return obj
+
 def gerar_tabela_achados(auditados):
     # Reconstrói o dicionário de procedimentos a partir dos achados em cada auditado
     procedimentos = {}
@@ -572,6 +713,7 @@ def gerar_tabela_situacoes_inconformes(auditados):
     # Pega os procedimentos aplicados em qualquer um:
     for p in list(auditados.values())[0].procedimentos_executados:
         procedimentos[p.id] = p
+
 
     # Coleta todos os encaminhamentos únicos
     todas_situacoes_inconformes = []

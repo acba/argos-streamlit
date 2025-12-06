@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
-import pickle
+import json
 import zipfile
 
 st.set_page_config(page_title="Visualizar Resultado", layout="wide")
@@ -77,10 +77,12 @@ if st.session_state.audit_completed:
 
     if not st.session_state.download_files:
         with st.spinner("Gerando arquivos para download..."):
-            # 1. Arquivo Pickle
-            pkl_buffer = io.BytesIO()
-            pickle.dump(results["auditados"], pkl_buffer)
-            st.session_state.download_files['pkl'] = pkl_buffer.getvalue()
+            # 1. Arquivo JSON (Substituindo Pickle)
+            json_buffer = io.BytesIO()
+            auditados_dict = {k: v.to_dict() for k, v in results["auditados"].items()}
+            json_str = json.dumps(auditados_dict, indent=2, ensure_ascii=False)
+            json_buffer.write(json_str.encode('utf-8'))
+            st.session_state.download_files['json'] = json_buffer.getvalue()
 
             # 2. Arquivo Excel
             excel_buffer = io.BytesIO()
@@ -105,10 +107,10 @@ if st.session_state.audit_completed:
             st.session_state.download_files['zip'] = zip_buffer.getvalue()
 
     st.download_button(
-        label="Baixar Objeto Auditados (.pkl)",
-        data=st.session_state.download_files['pkl'],
-        file_name="auditados.pkl",
-        mime="application/octet-stream"
+        label="Baixar Objeto Auditados (.json)",
+        data=st.session_state.download_files['json'],
+        file_name="auditados.json",
+        mime="application/json"
     )
     st.download_button(
         label="Baixar Todas as Tabelas (.xlsx)",

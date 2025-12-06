@@ -1,19 +1,20 @@
 import streamlit as st
-import pickle
-from classes import gerar_tabela_encaminhamentos, gerar_tabela_achados, gerar_tabela_situacoes_inconformes
+import json
+from classes import gerar_tabela_encaminhamentos, gerar_tabela_achados, gerar_tabela_situacoes_inconformes, Auditado
 
 st.set_page_config(page_title="Carregar Resultado", layout="wide")
 
 st.title("Carregar Resultado de Auditoria")
-st.write("Esta seção permite carregar um resultado de auditoria previamente salvo (arquivo .pkl) para visualizar e baixar os resultados sem a necessidade de reprocessar os arquivos de entrada.")
+st.write("Esta seção permite carregar um resultado de auditoria previamente salvo (arquivo .json) para visualizar e baixar os resultados sem a necessidade de reprocessar os arquivos de entrada.")
 
-arquivo_resultado = st.file_uploader("Carregar arquivo de resultado da auditoria (.pkl)", type=["pkl"])
+arquivo_resultado = st.file_uploader("Carregar arquivo de resultado da auditoria (.json)", type=["json"])
 
 if arquivo_resultado:
     try:
         with st.spinner("Carregando e processando resultado..."):
-            # Carrega o objeto 'auditados' do arquivo pkl
-            auditados = pickle.load(arquivo_resultado)
+            # Carrega o objeto 'auditados' do arquivo json
+            loaded_data = json.load(arquivo_resultado)
+            auditados = {k: Auditado.from_dict(v) for k, v in loaded_data.items()}
 
             # Gera novamente as tabelas a partir dos dados carregados
             tabela_encaminhamentos = gerar_tabela_encaminhamentos(auditados)
