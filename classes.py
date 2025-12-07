@@ -294,43 +294,37 @@ class ProcedimentoAuditoria:
         if achado_ocorreu:
             achado = Achado(numero=self.numero_achado, nome=self.nome_achado)
 
+            # Deduplicação preservando a ordem de inserção
             encaminhamentos = []
+            seen_encaminhamentos = set()
+            
+            evidencias = []
+            seen_evidencias = set()
+            
+            situacoes_encontradas = []
+            seen_situacoes = set()
+
             for acao in self.acoes_verificacao:
                 if acao.resultado:
-                    if len(encaminhamentos):
-                        encontrou = False
-                        for e in encaminhamentos:
-                            if e['encaminhamento'] == acao.encaminhamento and e['tipo'] == acao.tipo_encaminhamento:
-                                encontrou = True
-
-                        if not encontrou:
+                    # Encaminhamentos
+                    if acao.encaminhamento and acao.tipo_encaminhamento:
+                        enc_tuple = (acao.encaminhamento, acao.tipo_encaminhamento)
+                        if enc_tuple not in seen_encaminhamentos:
+                            seen_encaminhamentos.add(enc_tuple)
                             encaminhamentos.append({'encaminhamento': acao.encaminhamento, 'tipo': acao.tipo_encaminhamento})
-                    else:
-                        encaminhamentos.append({'encaminhamento': acao.encaminhamento, 'tipo': acao.tipo_encaminhamento})
+
+                    # Evidências
+                    if acao.descricao_evidencia and acao.descricao_evidencia not in seen_evidencias:
+                        seen_evidencias.add(acao.descricao_evidencia)
+                        evidencias.append(acao.descricao_evidencia)
+
+                    # Situações Encontradas
+                    if not pd.isna(acao.descricao_situacao_inconforme) and acao.descricao_situacao_inconforme not in seen_situacoes:
+                        seen_situacoes.add(acao.descricao_situacao_inconforme)
+                        situacoes_encontradas.append(acao.descricao_situacao_inconforme)
 
             achado.encaminhamentos = encaminhamentos
-            # achado.encaminhamentos = [{'encaminhamento': acao.encaminhamento, 'tipo': acao.tipo_encaminhamento} for acao in self.acoes_verificacao if acao.resultado]                       # # Remover duplicatas
-            # achado.encaminhamentos = sorted(
-            #     [dict(t) for t in {tuple(sorted(d.items())) for d in achado.encaminhamentos}],
-            #     key=lambda x: x['tipo']
-            # )
-
-            evidencias = []
-            for acao in self.acoes_verificacao:
-                if acao.resultado and acao.descricao_evidencia not in evidencias:
-                    evidencias.append(acao.descricao_evidencia)
-
             achado.evidencias = evidencias
-
-            # achado.evidencias = list(set(achado.evidencias)) # Remover duplicatas
-
-            situacoes_encontradas = []
-            for acao in self.acoes_verificacao:
-                if acao.resultado and not pd.isna(acao.descricao_situacao_inconforme) and acao.descricao_situacao_inconforme not in situacoes_encontradas:
-                    situacoes_encontradas.append(acao.descricao_situacao_inconforme)
-
-            # achado.situacoes_encontradas = [acao.descricao_situacao_inconforme for acao in self.acoes_verificacao if acao.resultado and not pd.isna(acao.descricao_situacao_inconforme)]
-            # achado.situacoes_encontradas = list(set(achado.situacoes_encontradas))  # Remover duplicatas
             achado.situacoes_encontradas = situacoes_encontradas
             self.achado = achado
 
@@ -723,10 +717,12 @@ def gerar_tabela_situacoes_inconformes(auditados):
 
     # Coleta todos os encaminhamentos únicos
     todas_situacoes_inconformes = []
+    seen_situacoes = set()
     for p in procedimentos.values():
         for acao in p.acoes_verificacao:
             texto = f"[ACHADO {p.numero_achado}] {acao.descricao_situacao_inconforme}"
-            if texto not in todas_situacoes_inconformes:
+            if texto not in seen_situacoes:
+                seen_situacoes.add(texto)
                 todas_situacoes_inconformes.append(texto)
 
     # todas_situacoes_inconformes = sorted({f"[ACHADO {p.numero_achado}] {acao.descricao_situacao_inconforme}" for p in procedimentos.values()
