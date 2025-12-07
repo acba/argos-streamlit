@@ -162,7 +162,7 @@ class AcaoVerificacao:
                 print(f'ERROR: Não foi possível encontrar o campo "{self.informacao_requerida}" na fonte de informação.')
                 print(f'ERROR: Ajuste o campo ou a fonte.')
                 # return self
-                raise ValueError(f'Na Ação de Verificação "{self.id}", não foi possível encontrar a coluna "{info_requerida}" na fonte de informação "{self.fonte_informacao.descricao}". ')
+                raise ValueError(f'Na Ação de Verificação "{self.id}", não foi possível encontrar a coluna "{info_requerida}" na fonte de informação "{self.fonte_informacao.descricao}". '
                                  f'Verifique se o nome da coluna está correto no "mapa-verificacao-achados.xlsx".')
 
         # Realiza a busca e a verificação para cada campo especificado
@@ -254,13 +254,13 @@ class ProcedimentoAuditoria:
         self.achado_ocorreu = None
 
     def __repr__(self):
-        return  f"ProcedimentoAuditoria(id='{self.id}', \n" +
+        return  (f"ProcedimentoAuditoria(id='{self.id}', \n" +
                 f"descricao='{self.descricao}'\n" +
                 f"executado='{self.executado}'\n" +
                 f"logica_achado='{self.logica_achado}'\n" +
                 f"achado_ocorreu='{self.achado_ocorreu}'\n" +
                 f"achado='{self.achado}'\n" +
-                f"acoes_verificacao ('{len(self.acoes_verificacao)}')\n" #+ "\n".join([f"{acao}" for acao in self.acoes_verificacao])
+                f"acoes_verificacao ('{len(self.acoes_verificacao)}')\n") #+ "\n".join([f"{acao}" for acao in self.acoes_verificacao])
 
 
     def adicionar_acao(self, acao):
@@ -276,6 +276,7 @@ class ProcedimentoAuditoria:
 
         # Avalia a lógica do achado com os resultados das ações
         achado_ocorreu = avalia_logica(self.logica_achado, resultados)
+        self.achado_ocorreu = achado_ocorreu
 
         self.executado = True
 
@@ -382,10 +383,10 @@ class Auditado:
         self.tem_achados = False
 
     def __repr__(self):
-        return f"Auditado(id='{self.id}', sigla='{self.sigla}')\n" +
+        return (f"Auditado(id='{self.id}', sigla='{self.sigla}')\n" +
                 f"nome='{self.nome}'\n" +
                 f"foi_auditado='{self.foi_auditado}'\n" +
-                f"tem_achados='{self.tem_achados}'\n"
+                f"tem_achados='{self.tem_achados}'\n")
 
     def __aplicar_procedimento(self, procedimento, debug=False):
         if debug:
