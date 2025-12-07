@@ -64,11 +64,17 @@ if arquivo_auditados and arquivo_mapa_achados and arquivos_fontes_dados:
             if not st.session_state.files_processed:
                 # Leitura dos DataFrames
                 with st.spinner("Carregando planilhas..."):
-                    df_jurisdicionados = carregar_dados(arquivo_auditados, skiprows=0)
+                    # Define colunas obrigatórias para cada planilha
+                    cols_jurisdicionados = ['sigla', 'orgao']
+                    cols_procedimentos = ['id', 'descricao', 'logica_achado', 'numero_achado', 'nome_achado']
+                    cols_acoes = ['id', 'id_fonte_informacao', 'informacao_requerida', 'criterio', 'situacao_inconforme', 'tipo_encaminhamento']
+                    cols_fontes = ['id', 'descricao', 'filepath', 'chave_jurisdicionado']
 
-                    df_procedimentos = carregar_dados(arquivo_mapa_achados, sheet_name='Procedimentos de Auditoria')
-                    df_acoes_verificacao = carregar_dados(arquivo_mapa_achados, sheet_name='Ações de Verificação')
-                    df_fontes = carregar_dados(arquivo_mapa_achados, sheet_name='Fontes de Informação')
+                    df_jurisdicionados = carregar_dados(arquivo_auditados, skiprows=None, required_columns=cols_jurisdicionados)
+
+                    df_procedimentos = carregar_dados(arquivo_mapa_achados, sheet_name='Procedimentos de Auditoria', skiprows=None, required_columns=cols_procedimentos)
+                    df_acoes_verificacao = carregar_dados(arquivo_mapa_achados, sheet_name='Ações de Verificação', skiprows=None, required_columns=cols_acoes)
+                    df_fontes = carregar_dados(arquivo_mapa_achados, sheet_name='Fontes de Informação', skiprows=None, required_columns=cols_fontes)
 
                 # Mapeia os arquivos de fonte de dados carregados pelo nome
                 fontes_dados_carregadas = {f.name: f for f in arquivos_fontes_dados}

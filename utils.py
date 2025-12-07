@@ -10,10 +10,86 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import logging
 from datetime import date
 
-def carregar_dados(filepath, sheet_name=0, skiprows=2):
-    """Lê um arquivo Excel e retorna um DataFrame, lançando erro com contexto se falhar."""
+def detect_header(filepath, sheet_name=0, required_columns=None):
+    """
+    Detecta a linha de cabeçalho em um arquivo Excel procurando pelas colunas obrigatórias.
+    Retorna o índice da linha (0-based) ou levanta ValueError se não encontrar.
+    """
+    if not required_columns:
+        return 0 # Default to 0 if no columns specified
+
+    # Read a sample of rows to search for header
     try:
-        return pd.read_excel(filepath, sheet_name=sheet_name, skiprows=skiprows).map(lambda x: x.strip() if isinstance(x, str) else x)
+        # Ler as primeiras 20 linhas sem cabeçalho para inspecionar
+        df_sample = pd.read_excel(filepath, sheet_name=sheet_name, header=None, nrows=20)
+    except Exception as e:
+        filename = getattr(filepath, 'name', str(filepath))
+        raise ValueError(f"Erro ao ler amostra do arquivo '{filename}' aba '{sheet_name}': {e}")
+
+    required_set = set(c.lower().strip() for c in required_columns)
+    
+    for i, row in df_sample.iterrows():
+        # Convert row values to strings, lowercased and stripped, filtering out NaNs
+        row_values = set(str(val).lower().strip() for val in row.values if pd.notna(val))
+        
+        # Check if all required columns are present in this row
+        if required_set.issubset(row_values):
+            return i
+            
+    filename = getattr(filepath, 'name', str(filepath))
+    raise ValueError(f"Não foi possível detectar o cabeçalho na aba '{sheet_name}' do arquivo '{filename}'. Colunas esperadas: {', '.join(required_columns)}")
+
+def validar_schema(df, required_columns):
+    """
+    Valida se as colunas obrigatórias estão presentes no DataFrame.
+    Lança ValueError se faltar alguma.
+    """
+    if not required_columns:
+        return
+
+    df_cols = set(c.lower().strip() for c in df.columns)
+    req_cols = set(c.lower().strip() for c in required_columns)
+    
+    missing = req_cols - df_cols
+    if missing:
+        raise ValueError(f"Colunas obrigatórias ausentes: {', '.join(missing)}")
+
+def carregar_dados(filepath, sheet_name=0, skiprows=None, required_columns=None):
+    """
+    Lê um arquivo Excel e retorna um DataFrame.
+    
+    Args:
+        filepath: Caminho ou objeto do arquivo.
+        sheet_name: Nome ou índice da aba.
+        skiprows: (Opcional) Número de linhas para pular. Se None e required_columns for fornecido, tenta detectar.
+        required_columns: (Opcional) Lista de nomes de colunas obrigatórias para detecção e validação.
+    """
+    try:
+        # Se skiprows não for informado mas tivermos colunas obrigatórias, tenta detectar
+        if skiprows is None and required_columns:
+            skiprows = detect_header(filepath, sheet_name, required_columns)
+        elif skiprows is None:
+            skiprows = 0 # Default legacy behavior
+
+        # Carrega o dataframe final
+        df = pd.read_excel(filepath, sheet_name=sheet_name, skiprows=skiprows)
+        
+        # Normaliza nomes das colunas para strip (remove espaços extras)
+        df.columns = [str(c).strip() for c in df.columns]
+        
+        # Aplica map apenas nas células de string
+        df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
+
+        # Valida schema se solicitado
+        if required_columns:
+            # A validação aqui é case-insensitive por segurança, 
+            # mas idealmente os nomes devem bater exato ou normalizarmos tudo.
+            # Para garantir robustez, vamos validar contra os nomes normalizados (strip).
+            # A função validar_schema já faz lower().strip() para comparar.
+            validar_schema(df, required_columns)
+
+        return df
+
     except Exception as e:
         filename = getattr(filepath, 'name', str(filepath))
         raise ValueError(f"Erro ao carregar a planilha '{sheet_name}' do arquivo '{filename}': {e}")
@@ -55,7 +131,8 @@ def parse_expression(expression):
     if current_token:
         tokens.append(current_token.strip())
 
-    return tokens
+    # Remove empty tokens that might result from spaces like "A | B" -> "A", "", "|", "", "B"
+    return [t for t in tokens if t]
 
 def infix_to_rpn(tokens):
     precedence = {'~': 3, '&': 2, '|': 1}
@@ -107,15 +184,17 @@ def safe_compare(value, condition):
     for op_symbol in sorted(operators.keys(), key=len, reverse=True):
         if condition.startswith(op_symbol):
             target_str = condition[len(op_symbol):].strip()
+            # Remove quotes if user added them for a number (e.g. > '5')
+            target_clean = target_str.strip("'\"")
             
             # Tenta comparação numérica
             try:
                 val_num = float(value)
-                target_num = float(target_str)
+                target_num = float(target_clean) # Convert cleaned target
                 return operators[op_symbol](val_num, target_num)
             except ValueError:
                 # Comparação de strings (remove aspas se houver)
-                target_clean = target_str.strip("'\"")
+                # target_clean já está limpo
                 return operators[op_symbol](value_str, target_clean)
     
     # Se não houver operador, assume igualdade (==)
