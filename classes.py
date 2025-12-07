@@ -53,10 +53,15 @@ class FonteInformacao:
             raise IOError(msg)
 
     def to_dict(self):
+        # Handle Streamlit UploadedFile objects which are not JSON serializable
+        filepath_val = self.filepath
+        if hasattr(filepath_val, 'name'):
+            filepath_val = filepath_val.name
+
         return {
             'id': self.id,
             'descricao': self.descricao,
-            'filepath': self.filepath,
+            'filepath': filepath_val,
             'chave_jurisdicionado': self.chave_jurisdicionado
         }
 
@@ -546,12 +551,12 @@ class Auditado:
 
         return conteudo_md
 
-    def documenta_procedimentos(self):
+    def documenta_procedimentos(self, template_path='docs/template_report.docx'):
         """
             Cria um documento .docx em memória com os dados do objeto Auditado, usando um template.
         """
         # Carregar o documento template
-        doc = Document('docs/template_report.docx')
+        doc = Document(template_path)
 
         # Pegar a coleção de estilos do documento
         styles = doc.styles
