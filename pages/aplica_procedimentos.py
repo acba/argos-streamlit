@@ -70,11 +70,6 @@ if arquivo_auditados and arquivo_mapa_achados and arquivos_fontes_dados:
                     df_acoes_verificacao = carregar_dados(arquivo_mapa_achados, sheet_name='Ações de Verificação')
                     df_fontes = carregar_dados(arquivo_mapa_achados, sheet_name='Fontes de Informação')
 
-                    # Verificação se os DataFrames foram carregados corretamente
-                    if any(df is None for df in [df_jurisdicionados, df_procedimentos, df_acoes_verificacao, df_fontes]):
-                        st.error("Erro ao carregar uma ou mais planilhas. Verifique os arquivos e se as abas ('Procedimentos de Auditoria', 'Ações de Verificação', 'Fontes de Informação') existem.")
-                        st.stop()
-
                 # Mapeia os arquivos de fonte de dados carregados pelo nome
                 fontes_dados_carregadas = {f.name: f for f in arquivos_fontes_dados}
 

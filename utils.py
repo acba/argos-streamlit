@@ -1,5 +1,4 @@
 import re
-import streamlit as st
 import pandas as pd
 import jinja2
 from jinja2 import Environment, BaseLoader, StrictUndefined
@@ -12,12 +11,12 @@ import logging
 from datetime import date
 
 def carregar_dados(filepath, sheet_name=0, skiprows=2):
-    """Lê um arquivo Excel e retorna um DataFrame, tratando erros."""
+    """Lê um arquivo Excel e retorna um DataFrame, lançando erro com contexto se falhar."""
     try:
         return pd.read_excel(filepath, sheet_name=sheet_name, skiprows=skiprows).map(lambda x: x.strip() if isinstance(x, str) else x)
     except Exception as e:
-        st.error(f"Erro ao carregar a planilha '{sheet_name}': {e}")
-        return None
+        filename = getattr(filepath, 'name', str(filepath))
+        raise ValueError(f"Erro ao carregar a planilha '{sheet_name}' do arquivo '{filename}': {e}")
 
 def get_variaveis_template(template_md_content):
     """Coleta as variáveis presentes em um template Jinja2."""
@@ -220,8 +219,14 @@ def avalia_expressao(expressao_achado, situacao_encontrada, debug=False):
         raise ValueError("Expressão lógica inválida ou vazia")
 
 def processa_imagens_contexto(contexto, context_files_path_map, template_type, base_docx=None):
-    """Substitui nomes de arquivos de imagem no contexto pelos caminhos ou objetos de imagem apropriados."""
+    """
+    Substitui nomes de arquivos de imagem no contexto pelos caminhos ou objetos de imagem apropriados.
+    
+    Returns:
+        tuple: (contexto_atualizado, lista_de_avisos)
+    """
     image_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')
+    warnings = []
 
     # Itera sobre uma cópia dos itens para permitir a modificação do dicionário
     for key, value in list(contexto.items()):
@@ -230,18 +235,17 @@ def processa_imagens_contexto(contexto, context_files_path_map, template_type, b
                 image_path = context_files_path_map[value]
                 if template_type == 'docx':
                     if base_docx is None:
-                        st.error("O objeto base_docx é necessário para processar imagens em templates .docx")
-                        continue
+                        raise ValueError("O objeto base_docx é necessário para processar imagens em templates .docx")
                     # Para docx, substitui pelo objeto InlineImage
                     contexto[key] = InlineImage(base_docx, image_path, width=Mm(160))
                 elif template_type == 'md':
                     # Para markdown, substitui pelo caminho do arquivo
                     contexto[key] = image_path
             else:
-                st.warning(f"Arquivo de imagem '{value}' para a variável '{key}' não encontrado. A imagem não será inserida.")
+                warnings.append(f"Arquivo de imagem '{value}' para a variável '{key}' não encontrado. A imagem não será inserida.")
                 contexto[key] = f"[Imagem '{value}' não encontrada]"
 
-    return contexto
+    return contexto, warnings
 
 def cross_ref_figuras(template_str: str) -> str:
     """
@@ -477,25 +481,20 @@ def aplicar_estilo_tabelas(docx_path, font_name='Calibri', header_size=10, body_
     - Corpo: Fonte parametrizada (padrão Calibri), tamanho parametrizado (padrão 9)
     - Alinhamento: Justificado para todo o conteúdo
     """
-    try:
-        doc = Document(docx_path)
-        for table in doc.tables:
-            # Aplicar "ajustar-se automaticamente ao conteúdo"
-            table.autofit = True # or WD_TABLE_AUTOFORMAT.AUTOFIT_CONTENTS if needed but True is often sufficient
+    doc = Document(docx_path)
+    for table in doc.tables:
+        # Aplicar "ajustar-se automaticamente ao conteúdo"
+        table.autofit = True # or WD_TABLE_AUTOFORMAT.AUTOFIT_CONTENTS if needed but True is often sufficient
 
-            for i, row in enumerate(table.rows):
-                is_header = (i == 0)
-                font_size = Pt(header_size) if is_header else Pt(body_size)
+        for i, row in enumerate(table.rows):
+            is_header = (i == 0)
+            font_size = Pt(header_size) if is_header else Pt(body_size)
 
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
-                        for run in paragraph.runs:
-                            run.font.name = font_name
-                            run.font.size = font_size
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+                    for run in paragraph.runs:
+                        run.font.name = font_name
+                        run.font.size = font_size
 
-        doc.save(docx_path)
-        return True
-    except Exception as e:
-        st.error(f"Erro ao aplicar estilo nas tabelas: {e}")
-        return False
+    doc.save(docx_path)

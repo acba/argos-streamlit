@@ -372,7 +372,11 @@ if st.session_state.audit_completed:
                                     if template_type == 'md':
                                         try:
                                             # Processa as imagens para o contexto do Markdown
-                                            contexto = processa_imagens_contexto(contexto, context_files_path_map, 'md')
+                                            contexto, warnings = processa_imagens_contexto(contexto, context_files_path_map, 'md')
+                                            if warnings:
+                                                for warning in warnings:
+                                                    st.warning(warning)
+
                                             template_content_local = cross_ref_figuras(template_content)
                                             template_content_local = cross_ref_tabelas(template_content_local)
                                             template_content_local = processar_quebras_pagina(template_content_local)
@@ -418,7 +422,10 @@ if st.session_state.audit_completed:
                                         try:
                                             base_docx = DocxTemplate(arquivo_template_docx)
                                             # Processa as imagens para o contexto do DOCX
-                                            contexto = processa_imagens_contexto(contexto, context_files_path_map, 'docx', base_docx=base_docx)
+                                            contexto, warnings = processa_imagens_contexto(contexto, context_files_path_map, 'docx', base_docx=base_docx)
+                                            if warnings:
+                                                for warning in warnings:
+                                                    st.warning(warning)
                                             base_docx.render(contexto)
                                         except Exception as e:
                                             st.error(f"Erro ao renderizar o template DOCX para **{sigla}**: {e}")
