@@ -118,7 +118,7 @@ if st.button("Analisar com Gemini"):
 
                 # Gera o conteúdo usando o cliente e o modelo selecionado
                 response, error_message = avalia_gemini(client, rendered_prompt, selected_model_id, temperature, response_format, uploaded_file_objects)
-                
+
                 if error_message:
                     st.error(error_message)
                 elif response:
@@ -133,13 +133,13 @@ if st.button("Analisar com Gemini"):
 if 'gemini_general_result' in st.session_state and st.session_state.gemini_general_result:
     st.subheader("Resultado da Análise")
     result_text = st.session_state.gemini_general_result
-    
+
     # Tenta detectar se o resultado é JSON para uma exibição mais bonita
     if result_text.strip().startswith('{') or result_text.strip().startswith('['):
         st.json(result_text)
     else:
         st.markdown(result_text)
-            
+
     download_filename = "resultado_gemini_geral.md"
     st.download_button(
         "Baixar Resultado",
