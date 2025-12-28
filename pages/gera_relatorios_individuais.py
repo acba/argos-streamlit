@@ -9,6 +9,7 @@ import os
 import tempfile
 import re
 import ast
+import json
 
 from docxtpl import DocxTemplate, RichText, InlineImage
 from docx.shared import Mm
@@ -114,6 +115,13 @@ if st.session_state.audit_completed:
                                 df_temp.rename(columns={col: col.rstrip('*')}, inplace=True)
                             except Exception as e:
                                 st.warning(f"Falha ao converter coluna especial '{col}' no arquivo '{arq.name}': {e}")
+                                try:
+                                    df_temp[col] = df_temp[col].apply(lambda x: json.loads(x) if x else x)
+                                    # Remove o asterisco do nome da coluna
+                                    df_temp.rename(columns={col: col.rstrip('*')}, inplace=True)
+                                    st.success(f"Sucesso ao importar o arquivo '{arq.name}' na segunda tentativa.")
+                                except Exception as e:
+                                    st.warning(f"Falha ao converter coluna especial '{col}' no arquivo '{arq.name}': {e}")
 
                     # Rastreia colunas para identificar duplicatas
                     for col in df_temp.columns:
@@ -138,7 +146,7 @@ if st.session_state.audit_completed:
             # .first() prioriza os valores dos primeiros arquivos da lista em caso de conflito de colunas
             df_contexto_extra = pd.concat(dfs_contexto).groupby(level=0).first()
             st.write(f"**Contexto consolidado ({len(dfs_contexto)} arquivos):**")
-            st.dataframe(df_contexto_extra.head())
+            st.dataframe(df_contexto_extra)
 
     arquivos_fontes_contexto = st.file_uploader("Arquivos presentes na planilha de contexto", accept_multiple_files=True)
 
