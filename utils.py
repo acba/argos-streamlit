@@ -27,15 +27,15 @@ def detect_header(filepath, sheet_name=0, required_columns=None):
         raise ValueError(f"Erro ao ler amostra do arquivo '{filename}' aba '{sheet_name}': {e}")
 
     required_set = set(c.lower().strip() for c in required_columns)
-    
+
     for i, row in df_sample.iterrows():
         # Convert row values to strings, lowercased and stripped, filtering out NaNs
         row_values = set(str(val).lower().strip() for val in row.values if pd.notna(val))
-        
+
         # Check if all required columns are present in this row
         if required_set.issubset(row_values):
             return i
-            
+
     filename = getattr(filepath, 'name', str(filepath))
     raise ValueError(f"Não foi possível detectar o cabeçalho na aba '{sheet_name}' do arquivo '{filename}'. Colunas esperadas: {', '.join(required_columns)}")
 
@@ -49,7 +49,7 @@ def validar_schema(df, required_columns):
 
     df_cols = set(c.lower().strip() for c in df.columns)
     req_cols = set(c.lower().strip() for c in required_columns)
-    
+
     missing = req_cols - df_cols
     if missing:
         raise ValueError(f"Colunas obrigatórias ausentes: {', '.join(missing)}")
@@ -57,7 +57,7 @@ def validar_schema(df, required_columns):
 def carregar_dados(filepath, sheet_name=0, skiprows=None, required_columns=None):
     """
     Lê um arquivo Excel e retorna um DataFrame.
-    
+
     Args:
         filepath: Caminho ou objeto do arquivo.
         sheet_name: Nome ou índice da aba.
@@ -73,16 +73,16 @@ def carregar_dados(filepath, sheet_name=0, skiprows=None, required_columns=None)
 
         # Carrega o dataframe final
         df = pd.read_excel(filepath, sheet_name=sheet_name, skiprows=skiprows)
-        
+
         # Normaliza nomes das colunas para strip (remove espaços extras)
         df.columns = [str(c).strip() for c in df.columns]
-        
+
         # Aplica map apenas nas células de string
         df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
 
         # Valida schema se solicitado
         if required_columns:
-            # A validação aqui é case-insensitive por segurança, 
+            # A validação aqui é case-insensitive por segurança,
             # mas idealmente os nomes devem bater exato ou normalizarmos tudo.
             # Para garantir robustez, vamos validar contra os nomes normalizados (strip).
             # A função validar_schema já faz lower().strip() para comparar.
@@ -186,7 +186,7 @@ def safe_compare(value, condition):
             target_str = condition[len(op_symbol):].strip()
             # Remove quotes if user added them for a number (e.g. > '5')
             target_clean = target_str.strip("'\"")
-            
+
             # Tenta comparação numérica
             try:
                 val_num = float(value)
@@ -196,7 +196,7 @@ def safe_compare(value, condition):
                 # Comparação de strings (remove aspas se houver)
                 # target_clean já está limpo
                 return operators[op_symbol](value_str, target_clean)
-    
+
     # Se não houver operador, assume igualdade (==)
     # Remove aspas se o usuário tiver colocado (ex: 'Sim')
     target_clean = condition.strip("'\"")
@@ -207,22 +207,22 @@ def safe_compare(value, condition):
         return val_num == target_num
     except ValueError:
         pass
-        
+
     return value_str == target_clean
 
 def avalia_logica(expressao, contexto):
     """
-    Avalia uma expressão lógica (ex: 'AV01 & AV02') dado um contexto 
+    Avalia uma expressão lógica (ex: 'AV01 & AV02') dado um contexto
     (dicionário de resultados { 'AV01': True, ... }).
     """
     if not expressao:
         return False
-        
+
     tokens = parse_expression(str(expressao))
     rpn = infix_to_rpn(tokens)
-    
+
     pilha = []
-    
+
     for token in rpn:
         if token == '|':
             if len(pilha) < 2: raise ValueError("Expressão mal formada (operador |)")
@@ -242,7 +242,7 @@ def avalia_logica(expressao, contexto):
             # Token é uma chave no contexto (ex: AV01)
             val = contexto.get(token, False) # Default False se não achar
             pilha.append(val)
-            
+
     if len(pilha) == 1:
         return pilha[0]
     else:
@@ -281,13 +281,13 @@ def avalia_expressao(expressao_achado, situacao_encontrada, debug=False):
             # O token é uma condição simples (ex: "> 10" ou "Sim")
             # Removemos o '.' no final que às vezes vem da planilha
             condition = re.sub(r'\.$', '', token)
-            
+
             # Usamos safe_compare para validar
             resultado = safe_compare(situacao_encontrada, condition)
-            
+
             if debug:
                 print(f"    Comparando: Val='{situacao_encontrada}' Cond='{condition}' -> {resultado}")
-            
+
             pilha.append(resultado)
 
     if len(pilha) >= 1:
@@ -300,7 +300,7 @@ def avalia_expressao(expressao_achado, situacao_encontrada, debug=False):
 def processa_imagens_contexto(contexto, context_files_path_map, template_type, base_docx=None):
     """
     Substitui nomes de arquivos de imagem no contexto pelos caminhos ou objetos de imagem apropriados.
-    
+
     Returns:
         tuple: (contexto_atualizado, lista_de_avisos)
     """
@@ -577,3 +577,117 @@ def aplicar_estilo_tabelas(docx_path, font_name='Calibri', header_size=10, body_
                         run.font.size = font_size
 
     doc.save(docx_path)
+
+def apply_custom_style():
+    """
+    Aplica estilos CSS customizados para tornar a interface mais moderna e profissional.
+    Deve ser chamado no início de cada página Streamlit.
+    """
+    import streamlit as st
+
+    st.markdown("""
+        <style>
+        /* Import Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        /*
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
+        }*/
+
+        /* Títulos */
+        h1 {
+            color: #004e92;
+            font-weight: 700 !important;
+            letter-spacing: -0.5px;
+        }
+        h2, h3 {
+            color: #2c3e50;
+            font-weight: 600 !important;
+        }
+
+        /* Sidebar Styling */
+        /*section[data-testid="stSidebar"] {
+            background-color: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+        }*/
+
+        /* Cards customizados (Simulação com markdown) */
+        .card {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1rem;
+            border: 1px solid #e9ecef;
+            transition: transform 0.2s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+        .card h4 {
+            color: #0068C9;
+            margin-top: 0;
+            font-weight: 600;
+        }
+        .card p {
+            color: #6c757d;
+            font-size: 0.95rem;
+            margin-bottom: 0;
+        }
+
+        /* Botões */
+        div.stButton > button {
+            background-color: #0068C9;
+            color: white;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        div.stButton > button:hover {
+            background-color: #0056b3;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        div.stButton > button:active {
+            background-color: #004494;
+        }
+
+        /* File Uploader */
+        section[data-testid="stFileUploader"] {
+            border-radius: 10px;
+            padding: 1rem;
+            border: 1px dashed #ced4da;
+            background-color: #fdfdfe;
+        }
+
+        /* Expander */
+        .streamlit-expanderHeader {
+            font-weight: 600;
+            color: #495057;
+            background-color: white;
+            border-radius: 8px;
+        }
+
+        /* Mensagens de Sucesso/Info/Erro */
+        .stAlert {
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        </style>
+    """, unsafe_allow_html=True)
+
+def create_card(title, content, icon=None):
+    """Retorna o HTML para um card estilizado."""
+    icon_html = f'<div style="font-size: 1.5rem; margin-bottom: 0.5rem;">{icon}</div>' if icon else ''
+    return f"""
+    <div class="card">
+        {icon_html}
+        <h4>{title}</h4>
+        <p>{content}</p>
+    </div>
+    """
