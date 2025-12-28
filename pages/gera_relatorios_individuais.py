@@ -9,6 +9,7 @@ import os
 import tempfile
 import re
 import ast
+import json
 
 from docxtpl import DocxTemplate, RichText, InlineImage
 from docx.shared import Mm
@@ -113,7 +114,14 @@ if st.session_state.audit_completed:
                                 # Remove o asterisco do nome da coluna
                                 df_temp.rename(columns={col: col.rstrip('*')}, inplace=True)
                             except Exception as e:
-                                st.warning(f"Falha ao converter coluna especial '{col}' no arquivo '{arq.name}': {e}")
+                                st.warning(f"Falha ao converter coluna especial '{col}' no arquivo '{arq.name}': {e}\nTentar 2º modo de carga.")
+
+                                try:
+                                    df_temp[col] = df_temp[col].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
+                                    df_temp.rename(columns={col: col.rstrip('*')}, inplace=True)
+                                    st.success(f"Carga efetuado com sucesso.")
+                                except Exception as e:
+                                    st.warning(f"Falha ao converter coluna especial '{col}' no arquivo '{arq.name}': {e}")
 
                     # Rastreia colunas para identificar duplicatas
                     for col in df_temp.columns:
@@ -321,7 +329,7 @@ if st.session_state.audit_completed:
                     # --- Lógica para lidar com arquivos de contexto (incluindo ZIP) ---
                     env = Environment(loader=BaseLoader(), undefined=StrictUndefined)
                     # template_ref_docx = 'docs/template-relatorio-individual.docx'
-                    template_ref_docx = 'docs/template-base-estilos.docx'
+                    template_ref_docx = 'docs/template-base-estilos-sigiloso.docx'
                     generation_log = st.expander("Log de Geração", expanded=True)
                     zip_buffer = io.BytesIO()
 
