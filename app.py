@@ -1,8 +1,6 @@
 import streamlit as st
 import os
 
-os.makedirs('tmp', exist_ok=True)
-
 # Configuração da página principal
 st.set_page_config(
     page_title="Argos - Auditoria Simplificada",

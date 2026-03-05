@@ -59,7 +59,6 @@ The application will open in your default web browser (usually at `http://localh
     *   `escreve_relatorio.py`: Generates the final audit report.
 *   **`prompts/`**: Contains Markdown files with Jinja2 templates used as prompts for the Gemini AI.
 *   **`docs/`**: Stores Word (`.docx`) and Excel (`.xlsx`) templates used for report generation.
-*   **`tmp/`**: Temporary directory for file processing and uploads.
 
 ## Development Conventions
 
