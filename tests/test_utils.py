@@ -75,6 +75,26 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(avalia_expressao("> 5 & < 15", 10))
         self.assertFalse(avalia_expressao("> 5 & < 8", 10))
 
+    def test_avalia_expressao_com_texto_integral_de_alternativa(self):
+        alternativa_f = (
+            "f) Inexistente / Informal: Não há área de TI formalmente "
+            "instituída no organograma da organização."
+        )
+        alternativa_b = (
+            "b) Centralizada Terceirizada: Há uma área de TI centralizada e formal "
+            "que faz a gestão, mas a execução é terceirizada (ex: service desk)."
+        )
+        alternativa_c = (
+            "c) Centralizada Externa: Os serviços são prestados por estrutura externa."
+        )
+
+        self.assertTrue(avalia_expressao(alternativa_f, alternativa_f))
+        self.assertFalse(avalia_expressao(f"~({alternativa_f})", alternativa_f))
+        self.assertTrue(avalia_expressao(f"~({alternativa_f})", alternativa_b))
+        self.assertTrue(
+            avalia_expressao(f"({alternativa_b} | {alternativa_c})", alternativa_b)
+        )
+
     def test_processa_imagens_contexto(self):
         contexto = {
             'img1': 'foto.png',

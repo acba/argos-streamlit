@@ -304,6 +304,34 @@ def avalia_expressao(expressao_achado, situacao_encontrada, debug=False):
     expressao_achado = str(expressao_achado)
     # situacao_encontrada pode ser int/float/str, mantemos o tipo original para safe_compare tentar converter
 
+    # Alternativas exportadas pelo LimeSurvey podem conter marcadores como
+    # "f)" e outros parênteses que fazem parte do valor literal. Nesse caso,
+    # somente operadores separados por espaços e os delimitadores externos
+    # são estruturais; a pontuação interna deve permanecer na comparação.
+    if re.search(r"(?:^|[~(])\s*[a-z]\)\s", expressao_achado, flags=re.IGNORECASE):
+        def avaliar_alternativa(expressao):
+            expressao = expressao.strip()
+            if expressao.startswith('~(') and expressao.endswith(')'):
+                return not avaliar_alternativa(expressao[2:-1])
+            if (
+                expressao.startswith('(')
+                and expressao.endswith(')')
+                and (' | ' in expressao or ' & ' in expressao)
+            ):
+                expressao = expressao[1:-1].strip()
+            if ' | ' in expressao:
+                return any(avaliar_alternativa(item) for item in expressao.split(' | '))
+            if ' & ' in expressao:
+                return all(avaliar_alternativa(item) for item in expressao.split(' & '))
+            if expressao.startswith('~'):
+                return not avaliar_alternativa(expressao[1:])
+            return safe_compare(situacao_encontrada, expressao)
+
+        resultado = avaliar_alternativa(expressao_achado)
+        if debug:
+            print(f"Avalia alternativa literal: '{expressao_achado}' vs '{situacao_encontrada}' -> {resultado}")
+        return resultado
+
     parsed_tokens = parse_expression(expressao_achado)
     tokens = infix_to_rpn(parsed_tokens)
 
