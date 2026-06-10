@@ -5,7 +5,7 @@ import os
 
 from classes import FonteInformacao, AcaoVerificacao, ProcedimentoAuditoria, Auditado, \
     gerar_tabela_encaminhamentos, gerar_tabela_achados, gerar_tabela_situacoes_inconformes
-from utils import carregar_dados
+from utils import aplicar_variaveis_temporarias, carregar_dados
 
 st.set_page_config(page_title="Aplicar Procedimentos", layout="wide")
 
@@ -69,12 +69,20 @@ if arquivo_auditados and arquivo_mapa_achados and arquivos_fontes_dados:
                     cols_procedimentos = ['id', 'descricao', 'logica_achado', 'numero_achado', 'nome_achado']
                     cols_acoes = ['id', 'id_fonte_informacao', 'informacao_requerida', 'criterio', 'situacao_inconforme', 'tipo_encaminhamento']
                     cols_fontes = ['id', 'descricao', 'filepath', 'chave_jurisdicionado']
+                    cols_variaveis = ['id', 'id_fonte_informacao', 'nome', 'expressao', 'descricao']
 
                     df_jurisdicionados = carregar_dados(arquivo_auditados, skiprows=None, required_columns=cols_jurisdicionados)
 
                     df_procedimentos = carregar_dados(arquivo_mapa_achados, sheet_name='Procedimentos de Auditoria', skiprows=None, required_columns=cols_procedimentos)
                     df_acoes_verificacao = carregar_dados(arquivo_mapa_achados, sheet_name='Ações de Verificação', skiprows=None, required_columns=cols_acoes)
                     df_fontes = carregar_dados(arquivo_mapa_achados, sheet_name='Fontes de Informação', skiprows=None, required_columns=cols_fontes)
+                    arquivo_mapa_achados.seek(0)
+                    abas_mapa = pd.ExcelFile(arquivo_mapa_achados).sheet_names
+                    arquivo_mapa_achados.seek(0)
+                    if 'Variáveis Temporárias' in abas_mapa:
+                        df_variaveis_temporarias = carregar_dados(arquivo_mapa_achados, sheet_name='Variáveis Temporárias', skiprows=None, required_columns=cols_variaveis)
+                    else:
+                        df_variaveis_temporarias = pd.DataFrame(columns=cols_variaveis)
 
                 # Mapeia os arquivos de fonte de dados carregados pelo nome
                 fontes_dados_carregadas = {f.name: f for f in arquivos_fontes_dados}
@@ -97,6 +105,8 @@ if arquivo_auditados and arquivo_mapa_achados and arquivos_fontes_dados:
                             st.error(f"Erro ao carregar a fonte de informação '{fonte.descricao}': {e}")
                         except AttributeError:
                             st.error(f"Arquivo da fonte de informação '{fonte.descricao}' ('{nome_arquivo_fonte}') não foi encontrado nos arquivos carregados. Verifique o nome.")
+
+                    aplicar_variaveis_temporarias(fontes, df_variaveis_temporarias)
 
                 # 2. Leitura das ações de verificação
                 with st.spinner("Processando ações de verificação..."):

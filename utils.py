@@ -94,6 +94,57 @@ def carregar_dados(filepath, sheet_name=0, skiprows=None, required_columns=None)
         filename = getattr(filepath, 'name', str(filepath))
         raise ValueError(f"Erro ao carregar a planilha '{sheet_name}' do arquivo '{filename}': {e}")
 
+
+def aplicar_variaveis_temporarias(fontes, variaveis):
+    """Materializa colunas derivadas nas fontes apenas durante o processamento."""
+    if variaveis is None or variaveis.empty:
+        return fontes
+
+    required = {'id', 'id_fonte_informacao', 'nome', 'expressao'}
+    missing = required - set(variaveis.columns)
+    if missing:
+        raise ValueError(
+            "Colunas obrigatórias ausentes em Variáveis Temporárias: "
+            + ", ".join(sorted(missing))
+        )
+
+    nomes_criados = set()
+    for _, row in variaveis.iterrows():
+        variable_id = str(row['id']).strip()
+        source_id = str(row['id_fonte_informacao']).strip()
+        name = str(row['nome']).strip()
+        expression = str(row['expressao']).strip()
+        source = fontes.get(source_id)
+
+        if source is None:
+            raise ValueError(
+                f"Variável temporária {variable_id} refere-se à fonte inexistente {source_id!r}."
+            )
+        if source.info is None:
+            raise ValueError(
+                f"A fonte {source_id!r} não foi carregada para calcular a variável {variable_id}."
+            )
+        if not name or name.lower() == 'nan':
+            raise ValueError(f"Variável temporária {variable_id} sem nome.")
+        if name in nomes_criados or name in source.info.columns:
+            raise ValueError(f"Nome de variável temporária duplicado ou já existente: {name!r}.")
+
+        prepared = expression
+        for column in sorted(source.info.columns, key=lambda value: len(str(value)), reverse=True):
+            column = str(column)
+            if not re.fullmatch(r"[A-Za-z_]\w*", column):
+                prepared = prepared.replace(column, f"`{column}`")
+
+        try:
+            source.info[name] = source.info.eval(prepared, engine='python')
+        except Exception as exc:
+            raise ValueError(
+                f"Não foi possível calcular a variável temporária {variable_id} ({name}): {exc}"
+            ) from exc
+        nomes_criados.add(name)
+
+    return fontes
+
 def get_variaveis_template(template_md_content):
     """Coleta as variáveis presentes em um template Jinja2."""
     if not template_md_content:

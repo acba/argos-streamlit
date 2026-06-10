@@ -14,6 +14,8 @@ def safe_serialize(obj):
         return int(obj)
     elif isinstance(obj, (np.floating, np.float64)):
         return float(obj) if not pd.isna(obj) else None
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif pd.isna(obj):
@@ -44,6 +46,14 @@ class FonteInformacao:
             pd.read_excel(self.filepath, nrows=1)
             self.info = pd.read_excel(self.filepath)
             if self.chave_jurisdicionado:
+                # Trata chaves duplicadas e remove espaços em branco extras
+                if self.chave_jurisdicionado in self.info.columns:
+                    self.info[self.chave_jurisdicionado] = self.info[self.chave_jurisdicionado].astype(str).str.strip()
+                    # Se houver coluna de data de envio, ordena para priorizar o enviado mais recentemente
+                    if 'submitdate' in self.info.columns:
+                        self.info = self.info.sort_values(by='submitdate', na_position='last')
+                    # Remove duplicatas baseadas na chave do jurisdicionado
+                    self.info = self.info.drop_duplicates(subset=[self.chave_jurisdicionado], keep='first')
                 self.info = self.info.set_index(self.chave_jurisdicionado)
         except Exception as e:
             if isinstance(self.filepath, str):
@@ -174,7 +184,11 @@ class AcaoVerificacao:
         if auditado in self.fonte_informacao.info.index:
             resultado_acoes = []
             for info_requerida in self.informacao_requerida.split('|'):
-                self.situacao_encontrada = self.fonte_informacao.info.loc[auditado, info_requerida]
+                val = self.fonte_informacao.info.loc[auditado, info_requerida]
+                # Defesa contra índices duplicados que retornam uma Series ao invés de um valor escalar
+                if isinstance(val, pd.Series):
+                    val = val.iloc[0]
+                self.situacao_encontrada = val
 
                 if self.situacao_encontrada_nan_e_achado and pd.isna(self.situacao_encontrada):
                     resultado_acoes.append(True)
@@ -210,7 +224,7 @@ class AcaoVerificacao:
             'acao_exclusiva_auditados': safe_serialize(self.acao_exclusiva_auditados),
             'auditado_inexistente_e_achado': safe_serialize(self.auditado_inexistente_e_achado),
             'descricao_auditado_inexistente': self.descricao_auditado_inexistente,
-            'situacao_encontrada_nan_e_achado': self.situacao_encontrada_nan_e_achado,
+            'situacao_encontrada_nan_e_achado': safe_serialize(self.situacao_encontrada_nan_e_achado),
             'situacao_encontrada': safe_serialize(self.situacao_encontrada),
             'resultado': bool(self.resultado) if self.resultado is not None else None
         }
@@ -343,10 +357,10 @@ class ProcedimentoAuditoria:
             'logica_achado': self.logica_achado,
             'numero_achado': self.numero_achado,
             'nome_achado': self.nome_achado,
-            'executado': self.executado,
+            'executado': safe_serialize(self.executado),
             'acoes_verificacao': [acao.to_dict() for acao in self.acoes_verificacao],
             'achado': self.achado.to_dict() if self.achado else None,
-            'achado_ocorreu': self.achado_ocorreu
+            'achado_ocorreu': safe_serialize(self.achado_ocorreu)
         }
 
     @classmethod
@@ -628,8 +642,8 @@ class Auditado:
             'id': self.id,
             'nome': self.nome,
             'sigla': self.sigla,
-            'foi_auditado': self.foi_auditado,
-            'tem_achados': self.tem_achados,
+            'foi_auditado': safe_serialize(self.foi_auditado),
+            'tem_achados': safe_serialize(self.tem_achados),
             'procedimentos_executados': [p.to_dict() for p in self.procedimentos_executados]
         }
 

@@ -75,12 +75,27 @@ if st.session_state.audit_completed:
 
     st.header("Baixar Resultados", divider="gray")
 
-    if not st.session_state.download_files:
+    class NpEncoder(json.JSONEncoder):
+        def default(self, obj):
+            import numpy as np
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj) if not pd.isna(obj) else None
+            elif isinstance(obj, np.bool_):
+                return bool(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif pd.isna(obj):
+                return None
+            return super().default(obj)
+
+    if not all(k in st.session_state.download_files for k in ['json', 'excel', 'zip', 'docx']):
         with st.spinner("Gerando arquivos para download..."):
             # 1. Arquivo JSON (Substituindo Pickle)
             json_buffer = io.BytesIO()
             auditados_dict = {k: v.to_dict() for k, v in results["auditados"].items()}
-            json_str = json.dumps(auditados_dict, indent=2, ensure_ascii=False)
+            json_str = json.dumps(auditados_dict, indent=2, ensure_ascii=False, cls=NpEncoder)
             json_buffer.write(json_str.encode('utf-8'))
             st.session_state.download_files['json'] = json_buffer.getvalue()
 

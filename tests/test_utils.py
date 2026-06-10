@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from unittest.mock import MagicMock, patch
 from utils import (
+    aplicar_variaveis_temporarias,
     carregar_dados,
     safe_compare,
     avalia_logica,
@@ -11,6 +12,7 @@ from utils import (
     parse_expression,
     infix_to_rpn
 )
+from classes import FonteInformacao
 
 class TestUtils(unittest.TestCase):
 
@@ -111,6 +113,34 @@ class TestUtils(unittest.TestCase):
         rpn = infix_to_rpn(tokens)
         # Expected RPN for A | (B & ~C) is A B C ~ & |
         self.assertEqual(rpn, ['A', 'B', 'C', '~', '&', '|'])
+
+    def test_aplicar_variaveis_temporarias_em_ordem(self):
+        fonte = FonteInformacao("Questionário", "dummy.xlsx", id="questionario")
+        fonte.info = pd.DataFrame({
+            'q0105[TI_efetivos]': [2, 0],
+            'q0105[TI_terceirizados]': [1, 3],
+        }, index=['A', 'B'])
+        variaveis = pd.DataFrame([
+            {
+                'id': 'VT01',
+                'id_fonte_informacao': 'questionario',
+                'nome': 'total_TI_interno',
+                'expressao': 'q0105[TI_efetivos]',
+                'descricao': 'Total interno',
+            },
+            {
+                'id': 'VT02',
+                'id_fonte_informacao': 'questionario',
+                'nome': 'predominio_terceiros',
+                'expressao': 'q0105[TI_terceirizados] > total_TI_interno',
+                'descricao': 'Predomínio de terceiros',
+            },
+        ])
+
+        aplicar_variaveis_temporarias({'questionario': fonte}, variaveis)
+
+        self.assertEqual(fonte.info['total_TI_interno'].tolist(), [2, 0])
+        self.assertEqual(fonte.info['predominio_terceiros'].tolist(), [False, True])
 
 if __name__ == '__main__':
     unittest.main()
