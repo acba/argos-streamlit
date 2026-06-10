@@ -72,7 +72,10 @@ def carregar_dados(filepath, sheet_name=0, skiprows=None, required_columns=None)
             skiprows = 0 # Default legacy behavior
 
         # Carrega o dataframe final
-        df = pd.read_excel(filepath, sheet_name=sheet_name, skiprows=skiprows)
+        na_values_sem_na = ['', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan',
+                            '1.#IND', '1.#QNAN', '<NA>', 'NA', 'NULL', 'NaN', 'n/a', 'nan', 'null']
+        df = pd.read_excel(filepath, sheet_name=sheet_name, skiprows=skiprows,
+                           keep_default_na=False, na_values=na_values_sem_na)
 
         # Normaliza nomes das colunas para strip (remove espaços extras)
         df.columns = [str(c).strip() for c in df.columns]

@@ -43,8 +43,10 @@ class FonteInformacao:
         """Lê o conteúdo da fonte de informação, assumindo que seja uma planilha Excel."""
         try:
             # Tenta ler uma amostra do arquivo para verificar se é uma planilha
-            pd.read_excel(self.filepath, nrows=1)
-            self.info = pd.read_excel(self.filepath)
+            na_values_sem_na = ['', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan',
+                                '1.#IND', '1.#QNAN', '<NA>', 'NA', 'NULL', 'NaN', 'n/a', 'nan', 'null']
+            pd.read_excel(self.filepath, nrows=1, keep_default_na=False, na_values=na_values_sem_na)
+            self.info = pd.read_excel(self.filepath, keep_default_na=False, na_values=na_values_sem_na)
             if self.chave_jurisdicionado:
                 # Trata chaves duplicadas e remove espaços em branco extras
                 if self.chave_jurisdicionado in self.info.columns:
