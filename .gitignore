@@ -19,3 +19,5 @@ prototipo.ipynb
 *.ipynb
 *.lss
 package-lock.json
+.output_reports/
+output_reports/
