@@ -16,8 +16,8 @@ import docx
 from docxtpl import DocxTemplate
 from jinja2 import Environment, BaseLoader, StrictUndefined
 
-# Ensure current directory is in PYTHONPATH to import classes and utils
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Ensure parent directory is in PYTHONPATH to import classes and utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from classes import Auditado, ProcedimentoAuditoria
 from utils import (
@@ -81,7 +81,7 @@ def main():
     )
     parser.add_argument(
         '--auditados', required=True,
-        help='Caminho para o arquivo JSON contendo o contexto dos auditados (ex: auditados.json).'
+        help='Caminho para o arquivo JSON contendo o contexto dos auditados (ex: resultado_auditoria.json).'
     )
     parser.add_argument(
         '--templates', nargs='+', required=True,

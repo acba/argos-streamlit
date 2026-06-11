@@ -122,9 +122,9 @@ if st.session_state.audit_completed:
             st.session_state.download_files['zip'] = zip_buffer.getvalue()
 
     st.download_button(
-        label="Baixar Objeto Auditados (.json)",
+        label="Baixar Objeto Resultado Auditoria (.json)",
         data=st.session_state.download_files['json'],
-        file_name="auditados.json",
+        file_name="resultado_auditoria.json",
         mime="application/json"
     )
     st.download_button(
